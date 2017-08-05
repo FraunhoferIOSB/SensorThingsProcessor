@@ -68,7 +68,7 @@ public class ProcessorBatchAggregate implements Processor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessorBatchAggregate.class);
     private static final String LB = Pattern.quote("[");
     private static final String RB = Pattern.quote("]");
-    private static Pattern postfixDetect = Pattern.compile("(.+)" + LB + "([0-9]+ [a-zA-Z]+)" + RB);
+    private static final Pattern POSTFIX_PATTERN = Pattern.compile("(.+)" + LB + "([0-9]+ [a-zA-Z]+)" + RB);
 
     private static class AggregationLevel implements Comparable<AggregationLevel> {
 
@@ -529,7 +529,7 @@ public class ProcessorBatchAggregate implements Processor {
                 for (Iterator<MultiDatastream> it = dsList.fullIterator(); it.hasNext();) {
                     MultiDatastream mds = it.next();
                     String name = mds.getName();
-                    Matcher matcher = postfixDetect.matcher(name);
+                    Matcher matcher = POSTFIX_PATTERN.matcher(name);
                     if (!matcher.matches()) {
                         LOGGER.debug("MultiDatastream {} is not an aggregate.");
                         continue;
@@ -706,16 +706,13 @@ public class ProcessorBatchAggregate implements Processor {
     }
 
     private void calculateAggregate(AggregateCombo combo, Interval interval) throws ServiceFailureException, ProcessException {
-        calculateAggregate(combo, interval.getStart(), interval.getEnd());
-    }
-
-    private void calculateAggregate(AggregateCombo combo, Instant start, Instant end) throws ServiceFailureException, ProcessException {
+        Instant start = interval.getStart();
+        Instant end = interval.getEnd();
         List<Observation> sourceObs = combo.getObservationsForSource(start, end);
-        LOGGER.debug("Calculating from {} to {} using {} obs for {}.", start, end, sourceObs.size(), combo);
+        LOGGER.info("Calculating {} using {} obs for {}.", interval, sourceObs.size(), combo);
         if (sourceObs.isEmpty()) {
             return;
         }
-        LOGGER.debug("                 {} -> {}, {} -> {}", start, sourceObs.get(0).getPhenomenonTime(), end, sourceObs.get(sourceObs.size() - 1).getPhenomenonTime());
 
         BigDecimal[] result;
         if (combo.sourceIsAggregate) {
@@ -727,7 +724,7 @@ public class ProcessorBatchAggregate implements Processor {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("resultCount", sourceObs.size());
         newObs.setParameters(parameters);
-        newObs.setPhenomenonTimeFrom(Interval.of(start, end));
+        newObs.setPhenomenonTimeFrom(interval);
         targetService.addObservation(newObs);
     }
 
@@ -767,11 +764,11 @@ public class ProcessorBatchAggregate implements Processor {
             Instant calcIntervalEnd = calcIntervalStart.plus(combo.level.duration);
 
             if (lastSourcePhenTime.isBefore(calcIntervalEnd)) {
-                LOGGER.debug("Nothing (more) to do for {}.", combo);
+                LOGGER.info("Nothing (more) to do for {}.", combo);
                 return;
             }
 
-            calculateAggregate(combo, calcIntervalStart, calcIntervalEnd);
+            calculateAggregate(combo, Interval.of(calcIntervalStart, calcIntervalEnd));
             calcIntervalStart = calcIntervalEnd;
         }
 
