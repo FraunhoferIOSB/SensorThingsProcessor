@@ -24,7 +24,6 @@ import de.fraunhofer.iosb.ilt.stp.ProcessorHelper;
 import de.fraunhofer.iosb.ilt.stp.sta.Service;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
@@ -48,7 +47,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -472,6 +470,7 @@ public class ProcessorBatchAggregate implements Processor {
     private Set<CalculationOrder> orders = new HashSet<>();
     private DelayQueue<CalculationOrder> orderQueue = new DelayQueue<>();
     private ExecutorService orderExecutorService;
+    private Aggregator aggregator = new Aggregator();
 
     @Override
     public void configure(JsonElement config, Void context, Void edtCtx) {
@@ -627,84 +626,6 @@ public class ProcessorBatchAggregate implements Processor {
         }
     }
 
-    private int getScale(Number number) {
-        if (number instanceof BigDecimal) {
-            return ((BigDecimal) number).scale();
-        } else if (number instanceof Integer || number instanceof Long) {
-            return new BigDecimal(number.longValue()).scale();
-        }
-        return new BigDecimal(number.doubleValue()).scale();
-    }
-
-    private Number handleResult(Object result) {
-        if (result instanceof Number) {
-            Number number = (Number) result;
-            return number;
-        } else if (result instanceof List) {
-            List list = (List) result;
-            if (list.isEmpty()) {
-                return null;
-            }
-            return handleResult(list.get(0));
-        } else {
-            LOGGER.trace("Unknow result type: {}", result.getClass().getName());
-        }
-        return null;
-    }
-
-    private BigDecimal[] calculateAggregateResultFromOriginals(List<Observation> sourceObs) {
-        BigDecimal[] result;
-        int scale = 0;
-        DescriptiveStatistics stats = new DescriptiveStatistics();
-        for (Observation obs : sourceObs) {
-            Number number = handleResult(obs.getResult());
-            if (number == null) {
-                LOGGER.warn("Empty result in {}", obs);
-            } else {
-                scale = Math.max(getScale(number), scale);
-                stats.addValue(number.doubleValue());
-            }
-        }
-        result = new BigDecimal[]{
-            new BigDecimal(stats.getMean()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getMin()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getMax()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP)
-        };
-        return result;
-    }
-
-    private BigDecimal[] calculateAggregateResultFromAggregates(List<Observation> sourceObs) {
-        BigDecimal[] result;
-        DescriptiveStatistics stats = new DescriptiveStatistics();
-        double min = Double.POSITIVE_INFINITY;
-        double max = Double.NEGATIVE_INFINITY;
-        int scale = 0;
-        for (Observation obs : sourceObs) {
-            Object input = obs.getResult();
-            if (input instanceof List) {
-                List list = (List) input;
-                Number number = handleResult(list.get(0));
-                scale = Math.max(getScale(number), scale);
-
-                stats.addValue(number.doubleValue());
-                min = Math.min(min, handleResult(list.get(1)).doubleValue());
-                max = Math.max(max, handleResult(list.get(2)).doubleValue());
-            } else {
-                String type = input == null ? "null" : input.getClass().getName();
-                LOGGER.error("Aggregate input of obs {} should be a List, not a {}", obs.getId(), type);
-                throw new IllegalArgumentException("Expected List, got " + type);
-            }
-        }
-        result = new BigDecimal[]{
-            new BigDecimal(stats.getMean()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(min).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(max).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP)
-        };
-        return result;
-    }
-
     private void calculateAggregate(AggregateCombo combo, Interval interval) throws ServiceFailureException, ProcessException {
         Instant start = interval.getStart();
         Instant end = interval.getEnd();
@@ -716,9 +637,9 @@ public class ProcessorBatchAggregate implements Processor {
 
         BigDecimal[] result;
         if (combo.sourceIsAggregate) {
-            result = calculateAggregateResultFromAggregates(sourceObs);
+            result = aggregator.calculateAggregateResultFromAggregates(sourceObs);
         } else {
-            result = calculateAggregateResultFromOriginals(sourceObs);
+            result = aggregator.calculateAggregateResultFromOriginals(interval, sourceObs);
         }
         Observation newObs = new Observation(result, combo.target);
         Map<String, Object> parameters = new HashMap<>();
