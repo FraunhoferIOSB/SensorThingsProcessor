@@ -47,7 +47,7 @@
                         <Insets right="5.0" />
                      </GridPane.margin>
                   </CheckBox>
-                  <Button fx:id="buttonImport" mnemonicParsing="false" onAction="#actionImport" text="Import" GridPane.columnIndex="3" />
+                  <Button fx:id="buttonImport" mnemonicParsing="false" onAction="#actionImport" text="Process" GridPane.columnIndex="3" />
                   <CheckBox fx:id="toggleOnline" mnemonicParsing="false" text="OnLine" GridPane.columnIndex="1">
                      <GridPane.margin>
                         <Insets right="5.0" />

@@ -4,6 +4,7 @@ import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.TimeObject;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
@@ -31,10 +32,22 @@ public class Aggregator {
         return new BigDecimal(number.doubleValue()).scale();
     }
 
-    private Number handleResult(Object result) {
+    private BigDecimal handleResult(Object result) {
+        if (result instanceof BigDecimal) {
+            return (BigDecimal) result;
+        }
+        if (result instanceof Double) {
+            return new BigDecimal((Double) result);
+        }
+        if (result instanceof Long) {
+            return new BigDecimal((Long) result);
+        }
+        if (result instanceof Integer) {
+            return new BigDecimal((Integer) result);
+        }
         if (result instanceof Number) {
             Number number = (Number) result;
-            return number;
+            return new BigDecimal(number.doubleValue());
         } else if (result instanceof List) {
             List list = (List) result;
             if (list.isEmpty()) {
@@ -55,6 +68,64 @@ public class Aggregator {
         return phenTime.getAsDateTime().toInstant();
     }
 
+    public BigDecimal[] calculateAggregateResultFromOriginalLists(Interval interval, List<Observation> sourceObs) {
+        BigDecimal[] result;
+        int scale = 0;
+        DescriptiveStatistics stats = new DescriptiveStatistics();
+        BigDecimal min = new BigDecimal(Double.MAX_VALUE);
+        BigDecimal max = new BigDecimal(-Double.MAX_VALUE);
+        for (Observation obs : sourceObs) {
+            Object obsResultObj = obs.getResult();
+            if (!(obsResultObj instanceof List)) {
+                LOGGER.error("Expected list result, got {}", obsResultObj == null ? obsResultObj : obsResultObj.getClass().getName());
+                continue;
+            }
+            List list = (List) obsResultObj;
+
+            TimeObject phenomenonTime = obs.getPhenomenonTime();
+            if (!phenomenonTime.isInterval()) {
+                LOGGER.error("Expected phenTime to be an interval.");
+                continue;
+            }
+            Interval phenInterval = phenomenonTime.getAsInterval();
+            int itemCount = list.size();
+            int firstItem = 0;
+            int lastItem = itemCount - 1;
+            double itemDistMillis = ((double) phenInterval.toDuration().toMinutes()) / itemCount;
+            if (phenInterval.getStart().isBefore(interval.getStart())) {
+                long skipMillis = Duration.between(phenInterval.getStart(), interval.getStart()).toMillis();
+                firstItem = (int) (skipMillis / itemDistMillis);
+            }
+            if (phenInterval.getEnd().isAfter(interval.getEnd())) {
+                long skipMillis = Duration.between(phenInterval.getEnd(), interval.getEnd()).toMillis();
+                int skipEnd = (int) (skipMillis / itemDistMillis);
+                lastItem -= itemCount - skipEnd - 1;
+            }
+
+            for (int i = firstItem; i <= lastItem && i < itemCount; i++) {
+                BigDecimal number = handleResult(list.get(i));
+                if (number == null) {
+                    LOGGER.warn("Empty result in {}", obs);
+                    continue;
+                }
+                scale = Math.max(getScale(number), scale);
+                stats.addValue(number.doubleValue());
+                min = number.compareTo(min) < 0 ? number : min;
+                max = number.compareTo(max) > 0 ? number : max;
+            }
+        }
+        BigDecimal avg = new BigDecimal(stats.getMean());
+        BigDecimal dev = new BigDecimal(stats.getStandardDeviation());
+
+        result = new BigDecimal[]{
+            avg.setScale(Math.min(scale, avg.scale()), RoundingMode.HALF_UP),
+            min,
+            max,
+            dev.setScale(Math.min(scale, dev.scale()), RoundingMode.HALF_UP)
+        };
+        return result;
+    }
+
     public BigDecimal[] calculateAggregateResultFromOriginals(Interval interval, List<Observation> sourceObs) {
         BigDecimal[] result;
         int scale = 0;
@@ -68,6 +139,7 @@ public class Aggregator {
         double avg = 0;
         double curResult = 0;
         for (Observation obs : sourceObs) {
+
             Number number = handleResult(obs.getResult());
             if (number == null) {
                 LOGGER.warn("Empty result in {}", obs);

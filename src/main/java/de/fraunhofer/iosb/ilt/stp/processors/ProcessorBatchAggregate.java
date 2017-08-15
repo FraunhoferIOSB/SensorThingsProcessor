@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -94,6 +95,14 @@ public class ProcessorBatchAggregate implements Processor {
             return new AggregationLevel(unit, amount);
         }
 
+        public static boolean isPostfix(String postfix) {
+            return of(postfix) != null;
+        }
+
+        public static boolean nameHasPostfix(String dsName) {
+            return POSTFIX_PATTERN.matcher(dsName).matches();
+        }
+
         private static ChronoUnit getUnit(String unitString) {
             unitString = unitString.toUpperCase();
             try {
@@ -116,11 +125,28 @@ public class ProcessorBatchAggregate implements Processor {
         }
 
         public ZonedDateTime toIntervalStart(ZonedDateTime time) {
-            if (unit.getDuration().getSeconds() <= ChronoUnit.DAYS.getDuration().getSeconds()) {
-                return time.truncatedTo(unit);
-            } else {
-                throw new IllegalStateException("Cant do this yet.");
+            ZonedDateTime start;
+            switch (ChronoUnit.valueOf(unit.toString().toUpperCase())) {
+                case SECONDS:
+                    start = time.truncatedTo(ChronoUnit.MINUTES);
+                    break;
+                case MINUTES:
+                    start = time.truncatedTo(ChronoUnit.HOURS);
+                    break;
+                case HOURS:
+                    start = time.truncatedTo(ChronoUnit.DAYS);
+                    break;
+                case DAYS:
+                    start = time.with(TemporalAdjusters.firstDayOfYear()).truncatedTo(ChronoUnit.DAYS);
+                    break;
+                default:
+                    start = time.with(TemporalAdjusters.firstDayOfYear()).truncatedTo(ChronoUnit.DAYS);
             }
+            long haveMillis = Duration.between(start, time).toMillis();
+            long maxMillis = duration.toMillis();
+            long periods = haveMillis / maxMillis;
+            start = start.plus(duration.multipliedBy(periods));
+            return start;
         }
 
         @Override
@@ -163,6 +189,10 @@ public class ProcessorBatchAggregate implements Processor {
         public Datastream sourceDs;
         public MultiDatastream sourceMds;
         public boolean sourceIsAggregate;
+        /**
+         * Indicates that observations in the source contain a list of values.
+         */
+        public boolean sourceIsCollection = false;
         public AggregationLevel level;
         public String baseName;
         private ZoneId zoneId;
@@ -209,7 +239,7 @@ public class ProcessorBatchAggregate implements Processor {
 
         public Observation getLastForTarget() {
             try {
-                return target.observations().query().orderBy("phenomenonTime desc").first();
+                return target.observations().query().select("id", "phenomenonTime").orderBy("phenomenonTime desc").first();
             } catch (ServiceFailureException ex) {
                 LOGGER.error("Error fetching last observation.", ex);
                 return null;
@@ -219,7 +249,7 @@ public class ProcessorBatchAggregate implements Processor {
         public Observation getFirstForSource() {
             try {
                 if (hasSource()) {
-                    return getObsDaoForSource().query().orderBy("phenomenonTime asc").first();
+                    return getObsDaoForSource().query().select("id", "phenomenonTime").orderBy("phenomenonTime asc").first();
                 }
                 return null;
             } catch (ServiceFailureException ex) {
@@ -231,7 +261,7 @@ public class ProcessorBatchAggregate implements Processor {
         public Observation getLastForSource() {
             try {
                 if (hasSource()) {
-                    return getObsDaoForSource().query().orderBy("phenomenonTime desc").first();
+                    return getObsDaoForSource().query().select("id", "phenomenonTime").orderBy("phenomenonTime desc").first();
                 }
                 return null;
             } catch (ServiceFailureException ex) {
@@ -245,10 +275,11 @@ public class ProcessorBatchAggregate implements Processor {
             if (hasSource()) {
                 try {
                     StringBuilder filter = new StringBuilder();
-                    filter.append("phenomenonTime ge ")
+                    filter.append("overlaps(phenomenonTime,")
                             .append(start.toString())
-                            .append(" and phenomenonTime lt ")
-                            .append(end.toString());
+                            .append("/")
+                            .append(end.toString())
+                            .append(")");
                     EntityList<Observation> entityList = getObsDaoForSource().query().filter(filter.toString()).top(1000).list();
                     for (Iterator<Observation> it = entityList.fullIterator(); it.hasNext();) {
                         Observation entity = it.next();
@@ -284,10 +315,10 @@ public class ProcessorBatchAggregate implements Processor {
 
         public String getSourceObsMqttPath() {
             if (sourceDs != null) {
-                return "v1.0/Datastreams(" + sourceDs.getId() + ")/Observations";
+                return "v1.0/Datastreams(" + sourceDs.getId() + ")/Observations?$select=id,phenomenonTime";
             }
             if (sourceMds != null) {
-                return "v1.0/MultiDatastreams(" + sourceMds.getId() + ")/Observations";
+                return "v1.0/MultiDatastreams(" + sourceMds.getId() + ")/Observations?$select=id,phenomenonTime";
             }
             return "";
         }
@@ -585,8 +616,24 @@ public class ProcessorBatchAggregate implements Processor {
                     target.sourceIsAggregate = false;
                     return;
                 }
-                LOGGER.warn("No source found for {}.", target.baseName);
             }
+            {
+                List<Datastream> list = stsSource.datastreams().query().filter("startswith(name," + nameQuoted + ")").list().toList();
+                if (list.size() > 1) {
+                    LOGGER.warn("Multiple ({}) sources found for {}.", list.size(), target.baseName);
+                }
+                for (Datastream source : list) {
+                    String postfix = source.getName().substring(target.baseName.length());
+                    if (!AggregationLevel.isPostfix(postfix)) {
+                        continue;
+                    }
+                    target.sourceDs = source;
+                    target.sourceIsAggregate = false;
+                    target.sourceIsCollection = true;
+                    return;
+                }
+            }
+            LOGGER.warn("No source found for {}.", target.baseName);
         } catch (ServiceFailureException ex) {
             LOGGER.error("Failed to find source for {}." + target.baseName);
             LOGGER.debug("Exception:", ex);
@@ -634,10 +681,13 @@ public class ProcessorBatchAggregate implements Processor {
         if (sourceObs.isEmpty()) {
             return;
         }
+        LOGGER.debug("Obs:        {}/{}.", sourceObs.get(0).getPhenomenonTime(), sourceObs.get(sourceObs.size() - 1).getPhenomenonTime());
 
         BigDecimal[] result;
         if (combo.sourceIsAggregate) {
             result = aggregator.calculateAggregateResultFromAggregates(sourceObs);
+        } else if (combo.sourceIsCollection) {
+            result = aggregator.calculateAggregateResultFromOriginalLists(interval, sourceObs);
         } else {
             result = aggregator.calculateAggregateResultFromOriginals(interval, sourceObs);
         }
@@ -678,7 +728,7 @@ public class ProcessorBatchAggregate implements Processor {
             LOGGER.debug("No source observations at all for {}.", combo);
             return;
         }
-        Instant lastSourcePhenTime = getPhenTimeStart(lastSourceObs);
+        Instant lastSourcePhenTime = getPhenTimeEnd(lastSourceObs);
 
         boolean more = true;
         while (more) {
@@ -797,7 +847,7 @@ public class ProcessorBatchAggregate implements Processor {
                     editorThreadCount.getValue(),
                     orderQueue,
                     x -> x.execute(),
-                    "AggregatorProcessor");
+                    "Aggregator");
             // Find target multidatastreams
             Map<String, List<AggregateCombo>> mdsMap = findTargetMultiDatastreams();
             LOGGER.info("Found {} comboSets", mdsMap.size());
