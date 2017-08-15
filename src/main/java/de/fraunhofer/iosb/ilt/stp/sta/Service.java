@@ -47,9 +47,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +65,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
     /**
      * The logger for this class.
      */
-    private static final Logger LOGGER = LoggerFactory.getLogger(SensorThingsService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Service.class);
 
     private EditorMap<Map<String, Object>> editor;
     private EditorString editorService;
@@ -157,6 +160,22 @@ public class Service implements Configurable<SensorThingsService, Object> {
             MqttConnectOptions connOpts = new MqttConnectOptions();
             connOpts.setAutomaticReconnect(true);
             connOpts.setCleanSession(false);
+            connOpts.setKeepAliveInterval(60);
+            connOpts.setConnectionTimeout(30);
+            client.setCallback(new MqttCallback() {
+                @Override
+                public void connectionLost(Throwable cause) {
+                    LOGGER.debug("connectionLost");
+                }
+
+                @Override
+                public void messageArrived(String topic, MqttMessage message) throws Exception {
+                }
+
+                @Override
+                public void deliveryComplete(IMqttDeliveryToken token) {
+                }
+            });
             client.connect(connOpts);
         }
         return client;
