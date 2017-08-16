@@ -323,13 +323,22 @@ public class ProcessorBatchAggregate implements Processor {
             return "";
         }
 
-        public Interval calculateIntervalForTime(TimeObject phenTime) {
+        public List<Interval> calculateIntervalsForTime(TimeObject phenTime) {
+            List<Interval> retval = new ArrayList<>();
             Instant phenTimeStart = getPhenTimeStart(phenTime);
+            Instant phenTimeEnd = getPhenTimeEnd(phenTime);
 
             ZonedDateTime atZone = phenTimeStart.atZone(getZoneId());
             ZonedDateTime intStart = level.toIntervalStart(atZone);
-            ZonedDateTime intEnd = intStart.plus(level.duration);
-            return Interval.of(intStart.toInstant(), intEnd.toInstant());
+            ZonedDateTime intEnd = intStart.plus(level.amount, level.unit);
+
+            retval.add(Interval.of(intStart.toInstant(), intEnd.toInstant()));
+            while (intEnd.toInstant().isBefore(phenTimeEnd)) {
+                intStart = intEnd;
+                intEnd = intStart.plus(level.amount, level.unit);
+                retval.add(Interval.of(intStart.toInstant(), intEnd.toInstant()));
+            }
+            return retval;
         }
 
         /**
@@ -338,8 +347,8 @@ public class ProcessorBatchAggregate implements Processor {
          *
          * @param other The interval to check against the current interval and
          * to replace the current interval with if they are not the same.
-         * @return True if the given interval is the same as the current
-         * interval.
+         * @return null if the given interval is the same as the current
+         * interval, otherwise the current interval.
          */
         public Interval replaceIfNotCurrent(Interval other) {
             if (currentInterval == null) {
@@ -354,6 +363,32 @@ public class ProcessorBatchAggregate implements Processor {
                 // The interval changed. Recalculate the old interval.
                 Interval old = currentInterval;
                 currentInterval = other;
+                return old;
+            }
+        }
+
+        /**
+         * Unsets the current interval. If the given interval is the same as the
+         * current interval, null is returned. If the given interval is not the
+         * same as the current interval, the current interval is returned.
+         *
+         * @param other The interval to check against the current interval.
+         * @return null if the given interval is the same as the current
+         * interval.
+         */
+        public Interval unsetCurrent(Interval other) {
+            if (currentInterval == null) {
+                // There is no interval.
+                return null;
+            }
+            if (currentInterval.equals(other)) {
+                // The given interval is the same. Do nothing.
+                currentInterval = null;
+                return null;
+            } else {
+                // The interval is different. Recalculate the old interval.
+                Interval old = currentInterval;
+                currentInterval = null;
                 return old;
             }
         }
@@ -795,20 +830,42 @@ public class ProcessorBatchAggregate implements Processor {
             EntityType sourceType = combos.get(0).getSourceType();
             Observation obs = parseMessageToObservation(message.toString());
             for (AggregateCombo combo : combos) {
-                Interval interval = combo.calculateIntervalForTime(obs.getPhenomenonTime());
-                Interval toCalculate = combo.replaceIfNotCurrent(interval);
-                if (toCalculate == null) {
-                    LOGGER.debug("{} {}: Interval {} is current.", sourceType, sourceId, interval);
-                    continue;
-                }
-                LOGGER.debug("{} {}: Interval {} recalculating, because we now have {}.", sourceType, sourceId, toCalculate, interval);
-                CalculationOrder order = new CalculationOrder(combo, toCalculate, Instant.now().plus(orderDelay));
-                offerOrder(order);
+                createOrdersFor(combo, obs, sourceType, sourceId);
             }
         } catch (IOException ex) {
             LOGGER.error("Invalid message.", ex);
         } catch (Exception ex) {
             LOGGER.error("Exception processing!", ex);
+        }
+    }
+
+    private void createOrdersFor(AggregateCombo combo, Observation obs, EntityType sourceType, long sourceId) {
+        List<Interval> intervals = combo.calculateIntervalsForTime(obs.getPhenomenonTime());
+        int count = intervals.size();
+        if (count > 1) {
+            for (Interval interval : intervals) {
+                LOGGER.debug("{} {}: Interval {} recalculating.", sourceType, sourceId, interval);
+                CalculationOrder order = new CalculationOrder(combo, interval, Instant.now().plus(orderDelay));
+                offerOrder(order);
+            }
+        } else {
+            for (Interval interval : intervals) {
+                Interval toCalculate;
+                if (interval.getEnd().equals(getPhenTimeEnd(obs))) {
+                    // The observation is the last one for the interval.
+                    LOGGER.debug("{} {}: Interval {} recalculating, because end reached.", sourceType, sourceId, interval);
+                    CalculationOrder order = new CalculationOrder(combo, interval, Instant.now().plus(orderDelay));
+                    offerOrder(order);
+                    toCalculate = combo.unsetCurrent(interval);
+                } else {
+                    toCalculate = combo.replaceIfNotCurrent(interval);
+                }
+                if (toCalculate != null) {
+                    LOGGER.debug("{} {}: Interval {} recalculating, because we now have {}.", sourceType, sourceId, toCalculate, interval);
+                    CalculationOrder order = new CalculationOrder(combo, toCalculate, Instant.now().plus(orderDelay));
+                    offerOrder(order);
+                }
+            }
         }
     }
 
@@ -892,6 +949,10 @@ public class ProcessorBatchAggregate implements Processor {
 
     private static Instant getPhenTimeEnd(Observation obs) {
         TimeObject phenTime = obs.getPhenomenonTime();
+        return getPhenTimeEnd(phenTime);
+    }
+
+    private static Instant getPhenTimeEnd(TimeObject phenTime) {
         if (phenTime.isInterval()) {
             return phenTime.getAsInterval().getEnd();
         }
