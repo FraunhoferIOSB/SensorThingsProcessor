@@ -165,7 +165,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
             client.setCallback(new MqttCallback() {
                 @Override
                 public void connectionLost(Throwable cause) {
-                    LOGGER.debug("connectionLost");
+                    LOGGER.info("connectionLost");
                 }
 
                 @Override

@@ -91,15 +91,15 @@ public class Aggregator {
             int itemCount = list.size();
             int firstItem = 0;
             int lastItem = itemCount - 1;
-            double itemDistMillis = ((double) phenInterval.toDuration().toMinutes()) / itemCount;
+            double itemDistMillis = ((double) phenInterval.toDuration().toMillis()) / itemCount;
             if (phenInterval.getStart().isBefore(interval.getStart())) {
                 long skipMillis = Duration.between(phenInterval.getStart(), interval.getStart()).toMillis();
                 firstItem = (int) (skipMillis / itemDistMillis);
             }
             if (phenInterval.getEnd().isAfter(interval.getEnd())) {
-                long skipMillis = Duration.between(phenInterval.getEnd(), interval.getEnd()).toMillis();
+                long skipMillis = Duration.between(interval.getEnd(), phenInterval.getEnd()).toMillis();
                 int skipEnd = (int) (skipMillis / itemDistMillis);
-                lastItem -= itemCount - skipEnd - 1;
+                lastItem -= skipEnd;
             }
 
             for (int i = firstItem; i <= lastItem && i < itemCount; i++) {
