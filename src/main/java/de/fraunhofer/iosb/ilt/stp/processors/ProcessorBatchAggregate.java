@@ -785,7 +785,7 @@ public class ProcessorBatchAggregate implements Processor {
             try {
                 calculateAggregates(target);
             } catch (ServiceFailureException | ProcessException ex) {
-                LOGGER.error("Error calculating for: " + target);
+                LOGGER.error("Error calculating for: " + target, ex);
             }
         }
     }
