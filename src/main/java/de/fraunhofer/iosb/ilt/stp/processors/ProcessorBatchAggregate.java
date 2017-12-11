@@ -41,11 +41,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.eclipse.paho.client.mqttv3.MqttClient;
@@ -68,6 +71,7 @@ public class ProcessorBatchAggregate implements Processor {
     private static final String LB = Pattern.quote("[");
     private static final String RB = Pattern.quote("]");
     private static final Pattern POSTFIX_PATTERN = Pattern.compile("(.+)" + LB + "([0-9]+ [a-zA-Z]+)" + RB);
+    private static final int RECEIVE_QUEUE_CAPACITY = 100000;
 
     private static class AggregationLevel implements Comparable<AggregationLevel> {
 
@@ -442,6 +446,19 @@ public class ProcessorBatchAggregate implements Processor {
 
     }
 
+    private static class MessageContext {
+
+        public final List<AggregateCombo> combos;
+        public final String topic;
+        public final String message;
+
+        public MessageContext(List<AggregateCombo> combos, String topic, String message) {
+            this.combos = combos;
+            this.topic = topic;
+            this.message = message;
+        }
+    }
+
     private class CalculationOrder implements Delayed {
 
         private AtomicBoolean waiting = new AtomicBoolean(true);
@@ -533,9 +550,12 @@ public class ProcessorBatchAggregate implements Processor {
 
     private MqttClient mqttClient;
     private Map<String, List<AggregateCombo>> comboBySource;
+    private BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
+    private AtomicInteger messagesCount = new AtomicInteger(0);
     private Set<CalculationOrder> orders = new HashSet<>();
     private DelayQueue<CalculationOrder> orderQueue = new DelayQueue<>();
     private ExecutorService orderExecutorService;
+    private ExecutorService messageReceptionService;
     private Aggregator aggregator = new Aggregator();
 
     @Override
@@ -726,8 +746,16 @@ public class ProcessorBatchAggregate implements Processor {
         } else {
             result = aggregator.calculateAggregateResultFromOriginals(interval, sourceObs);
         }
+
         Observation newObs = new Observation(result, combo.target);
         Map<String, Object> parameters = new HashMap<>();
+        for (Observation sourceOb : sourceObs) {
+            Map<String, Object> otherParams = sourceOb.getParameters();
+            if (otherParams == null) {
+                continue;
+            }
+            parameters.putAll(otherParams);
+        }
         parameters.put("resultCount", sourceObs.size());
         newObs.setParameters(parameters);
         newObs.setPhenomenonTimeFrom(interval);
@@ -819,16 +847,24 @@ public class ProcessorBatchAggregate implements Processor {
             LOGGER.debug("Subscribing to: {}", path);
             final List<AggregateCombo> combos = entry.getValue();
             mqttClient.subscribe(path, (String topic, MqttMessage message) -> {
-                createOrderFor(combos, topic, message);
+                if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
+                    int count = messagesCount.getAndIncrement();
+                    if (count > 1) {
+                        LOGGER.trace("Receive queue size: {}", count);
+                    }
+                } else {
+                    LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
+                }
             });
         }
     }
 
-    private void createOrderFor(List<AggregateCombo> combos, String topic, MqttMessage message) {
+    private void createOrderFor(List<AggregateCombo> combos, String message) {
         try {
-            long sourceId = combos.get(0).getSourceId();
-            EntityType sourceType = combos.get(0).getSourceType();
-            Observation obs = parseMessageToObservation(message.toString());
+            AggregateCombo mainCombo = combos.get(0);
+            long sourceId = mainCombo.getSourceId();
+            EntityType sourceType = mainCombo.getSourceType();
+            Observation obs = parseMessageToObservation(message);
             for (AggregateCombo combo : combos) {
                 createOrdersFor(combo, obs, sourceType, sourceId);
             }
@@ -905,6 +941,12 @@ public class ProcessorBatchAggregate implements Processor {
                     orderQueue,
                     x -> x.execute(),
                     "Aggregator");
+            messageReceptionService = ProcessorHelper.createProcessors(editorThreadCount.getValue(),
+                    messagesToHandle, (MessageContext x) -> {
+                        messagesCount.decrementAndGet();
+                        createOrderFor(x.combos, x.message);
+                    },
+                    "Receiver");
             // Find target multidatastreams
             Map<String, List<AggregateCombo>> mdsMap = findTargetMultiDatastreams();
             LOGGER.info("Found {} comboSets", mdsMap.size());
