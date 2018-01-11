@@ -284,7 +284,12 @@ public class ProcessorBatchAggregate implements Processor {
                             .append("/")
                             .append(end.toString())
                             .append(")");
-                    EntityList<Observation> entityList = getObsDaoForSource().query().filter(filter.toString()).top(1000).list();
+                    EntityList<Observation> entityList = getObsDaoForSource()
+                            .query()
+                            .filter(filter.toString())
+                            .orderBy("phenomenonTime asc")
+                            .top(1000)
+                            .list();
                     for (Iterator<Observation> it = entityList.fullIterator(); it.hasNext();) {
                         Observation entity = it.next();
                         result.add(entity);
