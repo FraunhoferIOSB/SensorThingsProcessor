@@ -744,14 +744,18 @@ public class ProcessorBatchAggregate implements Processor {
         LOGGER.debug("Obs:        {}/{}.", sourceObs.get(0).getPhenomenonTime(), sourceObs.get(sourceObs.size() - 1).getPhenomenonTime());
 
         BigDecimal[] result;
-        if (combo.sourceIsAggregate) {
-            result = aggregator.calculateAggregateResultFromAggregates(sourceObs);
-        } else if (combo.sourceIsCollection) {
-            result = aggregator.calculateAggregateResultFromOriginalLists(interval, sourceObs);
-        } else {
-            result = aggregator.calculateAggregateResultFromOriginals(interval, sourceObs);
+        try {
+            if (combo.sourceIsAggregate) {
+                result = aggregator.calculateAggregateResultFromAggregates(sourceObs);
+            } else if (combo.sourceIsCollection) {
+                result = aggregator.calculateAggregateResultFromOriginalLists(interval, sourceObs);
+            } else {
+                result = aggregator.calculateAggregateResultFromOriginals(interval, sourceObs);
+            }
+        } catch (NumberFormatException exc) {
+            LOGGER.error("Failed to calculate statistics for " + combo.toString() + " interval " + interval, exc);
+            return;
         }
-
         Observation newObs = new Observation(result, combo.target);
         Map<String, Object> parameters = new HashMap<>();
         for (Observation sourceOb : sourceObs) {
