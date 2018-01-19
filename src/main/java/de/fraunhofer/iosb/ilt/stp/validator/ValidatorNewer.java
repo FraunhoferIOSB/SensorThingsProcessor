@@ -22,6 +22,7 @@ import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorNull;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
+import de.fraunhofer.iosb.ilt.sta.model.Id;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.TimeObject;
@@ -40,8 +41,8 @@ import java.util.Map;
 public class ValidatorNewer implements Validator {
 
     private EditorNull editor = new EditorNull("Validator", "Validates the observation against the datastream");
-    private final Map<Long, Instant> datastreamCache = new HashMap<>();
-    private final Map<Long, Instant> multiDatastreamCache = new HashMap<>();
+    private final Map<Id, Instant> datastreamCache = new HashMap<>();
+    private final Map<Id, Instant> multiDatastreamCache = new HashMap<>();
 
     @Override
     public boolean isValid(Observation obs) throws ProcessException {
@@ -71,7 +72,7 @@ public class ValidatorNewer implements Validator {
     }
 
     private Instant getTimeForDatastream(Datastream ds) throws ServiceFailureException {
-        Long dsId = ds.getId();
+        Id dsId = ds.getId();
         Instant latest = datastreamCache.get(dsId);
         if (latest == null) {
             Observation firstObs = ds.observations().query().select("@iot.id", "phenomenonTime").orderBy("phenomenonTime desc").first();
@@ -91,7 +92,7 @@ public class ValidatorNewer implements Validator {
     }
 
     private Instant getTimeForMultiDatastream(MultiDatastream mds) throws ServiceFailureException {
-        Long dsId = mds.getId();
+        Id dsId = mds.getId();
         Instant latest = multiDatastreamCache.get(dsId);
         if (latest == null) {
             Observation firstObs = mds.observations().query().select("@iot.id", "phenomenonTime").orderBy("phenomenonTime desc").first();

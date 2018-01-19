@@ -3,6 +3,7 @@ package de.fraunhofer.iosb.ilt.stp.processors;
 import com.google.common.collect.ComparisonChain;
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
@@ -12,6 +13,7 @@ import de.fraunhofer.iosb.ilt.sta.dao.BaseDao;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.EntityType;
+import de.fraunhofer.iosb.ilt.sta.model.Id;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
@@ -68,6 +70,7 @@ public class ProcessorBatchAggregate implements Processor {
      * The logger for this class.
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessorBatchAggregate.class);
+    private static final String KEY_AGGREGATE_FOR = "aggregateFor";
     private static final String LB = Pattern.quote("[");
     private static final String RB = Pattern.quote("]");
     private static final Pattern POSTFIX_PATTERN = Pattern.compile("(.+)" + LB + "([0-9]+ [a-zA-Z]+)" + RB);
@@ -221,14 +224,14 @@ public class ProcessorBatchAggregate implements Processor {
             return null;
         }
 
-        public long getSourceId() {
+        public Id getSourceId() {
             if (sourceDs != null) {
                 return sourceDs.getId();
             }
             if (sourceMds != null) {
                 return sourceMds.getId();
             }
-            return -1;
+            return null;
         }
 
         public BaseDao<Observation> getObsDaoForSource() {
@@ -434,7 +437,6 @@ public class ProcessorBatchAggregate implements Processor {
             return ComparisonChain.start()
                     .compare(level, o.level)
                     .compare(baseName, o.baseName)
-                    .compare(target.getId(), o.target.getId())
                     .result();
         }
 
@@ -544,6 +546,7 @@ public class ProcessorBatchAggregate implements Processor {
     private EditorString editorTimeZone;
     private EditorInt editorDelay;
     private EditorInt editorThreadCount;
+    private EditorBoolean editorFixReferences;
 
     private boolean noAct = false;
     private ZoneId zoneId;
@@ -552,6 +555,8 @@ public class ProcessorBatchAggregate implements Processor {
     private SensorThingsService stsTarget;
     private Service targetService;
     private Duration orderDelay;
+    private boolean fixReferences;
+    private boolean sourceEqualsTarget;
 
     private MqttClient mqttClient;
     private Map<String, List<AggregateCombo>> comboBySource;
@@ -574,6 +579,8 @@ public class ProcessorBatchAggregate implements Processor {
         sourceService.setNoAct(noAct);
         targetService.setNoAct(noAct);
         orderDelay = Duration.ofMillis(editorDelay.getValue().longValue());
+        fixReferences = editorFixReferences.getValue();
+        sourceEqualsTarget = sourceService.getService().getEndpoint().equals(targetService.getService().getEndpoint());
     }
 
     @Override
@@ -595,6 +602,9 @@ public class ProcessorBatchAggregate implements Processor {
 
             editorThreadCount = new EditorInt(0, 10, 1, 2, "Thread Count", "The number of simultanious calculations to run in parallel.");
             editor.addOption("threads", editorThreadCount, true);
+
+            editorFixReferences = new EditorBoolean(false, "Fix References", "Fix the references between aggregate multidatastreams.");
+            editor.addOption("fixRefs", editorFixReferences, true);
         }
         return editor;
     }
@@ -613,8 +623,9 @@ public class ProcessorBatchAggregate implements Processor {
     private Map<String, List<AggregateCombo>> findTargetMultiDatastreams() {
         Map<String, List<AggregateCombo>> result = new HashMap<>();
         try {
-            List<Thing> things = targetService.getAllThings();
-            for (Thing thing : things) {
+            Iterator<Thing> things = targetService.getAllThings();
+            while (things.hasNext()) {
+                Thing thing = things.next();
                 EntityList<MultiDatastream> dsList = thing.multiDatastreams().query().filter("endsWith(name, ']')").list();
                 for (Iterator<MultiDatastream> it = dsList.fullIterator(); it.hasNext();) {
                     MultiDatastream mds = it.next();
@@ -663,6 +674,7 @@ public class ProcessorBatchAggregate implements Processor {
                 if (list.size() > 0) {
                     target.sourceDs = list.get(0);
                     target.sourceIsAggregate = false;
+                    checkReference(target.sourceDs, target.target);
                     return;
                 }
             }
@@ -674,6 +686,7 @@ public class ProcessorBatchAggregate implements Processor {
                 if (list.size() > 0) {
                     target.sourceMds = list.get(0);
                     target.sourceIsAggregate = false;
+                    checkReference(target.sourceMds, target.target);
                     return;
                 }
             }
@@ -690,6 +703,7 @@ public class ProcessorBatchAggregate implements Processor {
                     target.sourceDs = source;
                     target.sourceIsAggregate = false;
                     target.sourceIsCollection = true;
+                    checkReference(target.sourceDs, target.target);
                     return;
                 }
             }
@@ -697,6 +711,48 @@ public class ProcessorBatchAggregate implements Processor {
         } catch (ServiceFailureException ex) {
             LOGGER.error("Failed to find source for {}." + target.baseName);
             LOGGER.debug("Exception:", ex);
+        }
+    }
+
+    private void checkReference(Datastream source, MultiDatastream aggregate) {
+        String expectedAggFor;
+        if (sourceEqualsTarget) {
+            expectedAggFor = "/Datastreams(" + source.getId().getUrl() + ")";
+        } else {
+            expectedAggFor = source.getSelfLink().toString();
+        }
+        checkReference(aggregate, expectedAggFor);
+    }
+
+    private void checkReference(MultiDatastream source, MultiDatastream aggregate) {
+        String expectedAggFor;
+        if (sourceEqualsTarget) {
+            expectedAggFor = "/MultiDatastreams(" + source.getId().getUrl() + ")";
+        } else {
+            expectedAggFor = source.getSelfLink().toString();
+        }
+        checkReference(aggregate, expectedAggFor);
+    }
+
+    private void checkReference(MultiDatastream aggregate, String expectedAggFor) {
+        Map<String, Object> properties = aggregate.getProperties();
+        if (properties == null) {
+            properties = new HashMap<>();
+            aggregate.setProperties(properties);
+        }
+        String aggFor = Objects.toString(properties.get(KEY_AGGREGATE_FOR));
+        if (!expectedAggFor.equals(aggFor)) {
+            if (fixReferences) {
+                try {
+                    LOGGER.info("Setting source reference for {} to {}.", aggregate.getName(), expectedAggFor);
+                    properties.put(KEY_AGGREGATE_FOR, expectedAggFor);
+                    targetService.getService().update(aggregate);
+                } catch (ServiceFailureException ex) {
+                    LOGGER.error("Failed to update reference.", ex);
+                }
+            } else {
+                LOGGER.info("Source reference for {} not correct. Should be {}.", aggregate.getName(), expectedAggFor);
+            }
         }
     }
 
@@ -716,6 +772,7 @@ public class ProcessorBatchAggregate implements Processor {
                     target.sourceMds = test.target;
                     target.sourceIsAggregate = true;
                     found = true;
+                    checkReference(target.sourceMds, target.target);
                 }
             }
             if (!found) {
@@ -871,7 +928,7 @@ public class ProcessorBatchAggregate implements Processor {
     private void createOrderFor(List<AggregateCombo> combos, String message) {
         try {
             AggregateCombo mainCombo = combos.get(0);
-            long sourceId = mainCombo.getSourceId();
+            Id sourceId = mainCombo.getSourceId();
             EntityType sourceType = mainCombo.getSourceType();
             Observation obs = parseMessageToObservation(message);
             for (AggregateCombo combo : combos) {
@@ -884,7 +941,7 @@ public class ProcessorBatchAggregate implements Processor {
         }
     }
 
-    private void createOrdersFor(AggregateCombo combo, Observation obs, EntityType sourceType, long sourceId) {
+    private void createOrdersFor(AggregateCombo combo, Observation obs, EntityType sourceType, Id sourceId) {
         List<Interval> intervals = combo.calculateIntervalsForTime(obs.getPhenomenonTime());
         int count = intervals.size();
         if (count > 1) {

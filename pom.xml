@@ -17,6 +17,15 @@
     <organization>
         <name>Fraunhofer IOSB</name>
     </organization>
+
+    <repositories>
+        <repository>
+            <id>bintray-fraunhoferiosb-Maven</id>
+            <name>bintray</name>
+            <url>http://dl.bintray.com/fraunhoferiosb/Maven</url>
+        </repository>
+    </repositories>
+
     <build>
         <plugins>
             <plugin>
@@ -48,7 +57,7 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>SensorThingsClient</artifactId>
-            <version>0.13</version>
+            <version>0.14</version>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>

@@ -281,18 +281,19 @@ public class Service implements Configurable<SensorThingsService, Object> {
         return value;
     }
 
-    public List<Thing> getAllThings() {
+    public Iterator<Thing> getAllThings() {
         List<Thing> result = new ArrayList<>();
         try {
             EntityList<Thing> list = service.things().query().list();
-            for (Iterator<Thing> it = list.fullIterator(); it.hasNext();) {
-                Thing thing = it.next();
-                result.add(thing);
-            }
+            return list.fullIterator();
         } catch (ServiceFailureException ex) {
             LOGGER.error("Failed to fetch things.", ex);
+            return null;
         }
-        return result;
+    }
+
+    public SensorThingsService getService() {
+        return service;
     }
 
 }
