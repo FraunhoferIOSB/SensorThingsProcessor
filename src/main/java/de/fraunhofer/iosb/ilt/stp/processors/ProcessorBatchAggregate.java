@@ -1028,6 +1028,7 @@ public class ProcessorBatchAggregate implements Processor {
     public void stopListening() {
         try {
             if (orderExecutorService != null) {
+                LOGGER.info("Stopping Processors.");
                 ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, 5, TimeUnit.SECONDS);
             }
             if (mqttClient.isConnected()) {

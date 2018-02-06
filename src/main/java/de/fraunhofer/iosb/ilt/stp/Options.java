@@ -53,6 +53,7 @@ public class Options {
 
     private final OptionToggle noAct;
     private final OptionToggle online;
+    private final OptionToggle daemon;
     private final OptionSingle<String> fileName;
 
     public Options() {
@@ -62,6 +63,9 @@ public class Options {
         online = addOption(
                 new OptionToggle("-online", "-o")
                         .setDescription("Run in on-line mode, listening for changes and processing as needed."));
+        daemon = addOption(
+                new OptionToggle("-daemon", "-d")
+                        .setDescription("Run in daemon mode, not listening for 'Enter' to exit."));
         fileName = addOption(
                 new OptionSingle<String>("-config", "-c")
                         .setParam(new ParameterString("file path", ""))
@@ -120,6 +124,10 @@ public class Options {
 
     public OptionToggle getOnline() {
         return online;
+    }
+
+    public OptionToggle getDaemon() {
+        return daemon;
     }
 
     public OptionSingle<String> getFileName() {

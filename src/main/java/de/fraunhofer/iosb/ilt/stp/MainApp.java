@@ -51,7 +51,6 @@ public class MainApp {
         } else {
             ProcessorWrapper.importCmdLine(arguments);
         }
-        System.exit(0);
     }
 
     public static void showHelp() {

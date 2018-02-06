@@ -53,6 +53,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
 
     private boolean noAct = false;
     private boolean online = false;
+    private boolean daemon = false;
     private Processor processor;
     private Thread shutdownHook;
 
@@ -106,7 +107,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
         Calendar start = Calendar.getInstance();
 
         processor.setNoAct(noAct);
-        if (online) {
+        if (online || daemon) {
             addShutdownHook();
             processor.startListening();
         } else {
@@ -121,6 +122,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
     public void doProcess(Options options) {
         this.noAct = options.getNoAct().isSet();
         this.online = options.getOnline().isSet();
+        this.daemon = options.getDaemon().isSet();
         String fileName = options.getFileName().getValue();
         File configFile = new File(fileName);
         try {
@@ -157,11 +159,13 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
 
         ProcessorWrapper wrapper = new ProcessorWrapper();
         wrapper.doProcess(options);
-        if (options.getOnline().isSet()) {
+        boolean isOnline = options.getOnline().isSet();
+        if (isOnline) {
             try (BufferedReader input = new BufferedReader(new InputStreamReader(System.in, "UTF-8"))) {
                 LOGGER.warn("Press Enter to exit.");
                 input.read();
             }
+            System.exit(0);
         }
     }
 
