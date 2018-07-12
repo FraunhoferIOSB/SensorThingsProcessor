@@ -29,21 +29,25 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ScrollPane;
 import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
 
-public class FXMLController implements Initializable {
+public class ControllerScene implements Initializable {
 
     /**
      * The logger for this class.
      */
-    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(FXMLController.class);
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(ControllerScene.class);
     @FXML
     private ScrollPane paneConfig;
     @FXML
@@ -58,6 +62,8 @@ public class FXMLController implements Initializable {
     private CheckBox toggleNoAct;
     @FXML
     private CheckBox toggleOnline;
+    @FXML
+    private Button buttonAggManager;
 
     private ProcessorWrapper wrapper;
     private EditorMap<Map<String, Object>> configEditor;
@@ -111,6 +117,21 @@ public class FXMLController implements Initializable {
     @FXML
     private void actionStop(ActionEvent event) {
         wrapper.stopProcess();
+    }
+
+    @FXML
+    private void actionAggManager(ActionEvent event) {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/AggregationManager.fxml"));
+            Parent content = loader.<Parent>load();
+            Stage stage = new Stage();
+            stage.setTitle("Aggregation Manager");
+            Scene scene = new Scene(content, 1200, 800);
+            stage.setScene(scene);
+            stage.show();
+        } catch (IOException ex) {
+            LOGGER.error("Failed to load scene for AggManager", ex);
+        }
     }
 
     @Override

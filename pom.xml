@@ -12,6 +12,8 @@
         <mainClass>de.fraunhofer.iosb.ilt.stp.MainApp</mainClass>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <Configurable.version>0.10-SNAPSHOT</Configurable.version>
+        <FROST-Client.version>0.15</FROST-Client.version>
     </properties>
 
     <organization>
@@ -22,7 +24,7 @@
         <repository>
             <id>bintray-fraunhoferiosb-Maven</id>
             <name>bintray</name>
-            <url>http://dl.bintray.com/fraunhoferiosb/Maven</url>
+            <url>https://dl.bintray.com/fraunhoferiosb/Maven</url>
         </repository>
     </repositories>
 
@@ -56,13 +58,13 @@
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>SensorThingsClient</artifactId>
-            <version>0.14</version>
+            <artifactId>FROST-Client</artifactId>
+            <version>${FROST-Client.version}</version>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>Configurable</artifactId>
-            <version>0.7</version>
+            <version>${Configurable.version}</version>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>

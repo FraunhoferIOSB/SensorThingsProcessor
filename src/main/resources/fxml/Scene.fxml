@@ -10,7 +10,7 @@
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.RowConstraints?>
 
-<AnchorPane id="AnchorPane" prefHeight="541.0" prefWidth="545.0" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="de.fraunhofer.iosb.ilt.stp.FXMLController">
+<AnchorPane id="AnchorPane" prefHeight="541.0" prefWidth="545.0" xmlns="http://javafx.com/javafx/8.0.111" xmlns:fx="http://javafx.com/fxml/1" fx:controller="de.fraunhofer.iosb.ilt.stp.ControllerScene">
    <children>
       <BorderPane layoutX="123.0" layoutY="124.0" prefHeight="200.0" prefWidth="200.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
          <top>
@@ -54,6 +54,7 @@
                      </GridPane.margin>
                   </CheckBox>
                   <Button fx:id="buttonStop" mnemonicParsing="false" onAction="#actionStop" text="Stop" GridPane.columnIndex="4" />
+                  <Button fx:id="buttonAggManager" mnemonicParsing="false" onAction="#actionAggManager" text="Open Aggregation Manager" />
                </children>
             </GridPane>
          </bottom>

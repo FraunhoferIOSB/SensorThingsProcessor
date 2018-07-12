@@ -1,4 +1,4 @@
-package de.fraunhofer.iosb.ilt.stp.processors;
+package de.fraunhofer.iosb.ilt.stp.processors.aggregation;
 
 import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.TimeObject;
