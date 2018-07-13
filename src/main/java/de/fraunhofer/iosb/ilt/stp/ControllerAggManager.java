@@ -156,6 +156,7 @@ public class ControllerAggManager implements Initializable {
     }
 
     private void createAggregate(AggregationBase base, AggregationLevel level) throws ServiceFailureException {
+        LOGGER.info("Creating {} for {}.", level, base.getBaseName());
         Datastream baseDs = base.getBaseDatastream();
         ObservedProperty op = baseDs.getObservedProperty();
         UnitOfMeasurement uom = baseDs.getUnitOfMeasurement();
@@ -177,7 +178,18 @@ public class ControllerAggManager implements Initializable {
     }
 
     private void deleteAggregate(AggregationBase base, AggregationLevel level) {
-
+        AggregateCombo combo = base.getCombosByLevel().get(level);
+        if (combo == null) {
+            LOGGER.error("Can not delete {} for {}, no such combo.", level, base.getBaseName());
+            return;
+        }
+        LOGGER.error("Deleting {} for {}", level, base.getBaseName());
+        try {
+            service.delete(combo.target);
+        } catch (ServiceFailureException ex) {
+            LOGGER.error("Failed to delete {}", combo.target);
+            LOGGER.error("Failed to delete:", ex);
+        }
     }
 
     private void applyChanges() throws ServiceFailureException {
@@ -188,11 +200,10 @@ public class ControllerAggManager implements Initializable {
                 AggregationLevel level = wantedEntry.getKey();
                 boolean wanted = wantedEntry.getValue();
                 if (wanted && !presentLevels.containsKey(level)) {
-                    LOGGER.info("Creating {} for {}.", level, base.getBaseName());
                     createAggregate(base, level);
-                } else if (!wanted && presentLevels.containsKey(level)) {
-                    LOGGER.info("Deleting {} from {}.", level, base.getBaseName());
 
+                } else if (!wanted && presentLevels.containsKey(level)) {
+                    deleteAggregate(base, level);
                 }
 
             }
