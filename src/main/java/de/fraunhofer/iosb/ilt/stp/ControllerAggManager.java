@@ -32,11 +32,13 @@ import javafx.beans.value.ObservableValueBase;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -46,6 +48,7 @@ import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.Text;
+import javafx.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -111,7 +114,14 @@ public class ControllerAggManager implements Initializable {
         if (column == null) {
             LOGGER.info("Creating column {}.", level);
             column = new TableColumn(level.toString());
-            column.setCellFactory((TableColumn<AggregationBase, Boolean> param) -> new CheckBoxTableCell<>());
+            column.setCellFactory(new Callback<TableColumn<AggregationBase, Boolean>, TableCell<AggregationBase, Boolean>>() {
+                @Override
+                public TableCell<AggregationBase, Boolean> call(TableColumn<AggregationBase, Boolean> param) {
+                    CheckBoxTableCell<AggregationBase, Boolean> cell = new CheckBoxTableCell<>();
+                    cell.setAlignment(Pos.CENTER);
+                    return cell;
+                }
+            });
             column.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, Boolean> param) -> param.getValue().getLevelProperty(level));
             column.setEditable(true);
             columnsByLevel.put(level, column);
