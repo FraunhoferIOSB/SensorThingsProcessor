@@ -27,6 +27,7 @@ import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.ProcessException;
+import java.math.BigDecimal;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,30 @@ public class ValidatorByPhenTime implements Validator {
 
     private boolean update;
 
+    private boolean resultCompare(Object one, Object two) {
+        if (one.equals(two)) {
+            return true;
+        }
+        try {
+            if (one instanceof Long && two instanceof Integer) {
+                return ((Long) one).equals(new Long((Integer) two));
+            }
+            if (two instanceof Long && one instanceof Integer) {
+                return ((Long) two).equals(new Long((Integer) one));
+            }
+            if (one instanceof BigDecimal) {
+                return ((BigDecimal) one).equals(new BigDecimal(two.toString()));
+            }
+            if (two instanceof BigDecimal) {
+                return ((BigDecimal) two).equals(new BigDecimal(one.toString()));
+            }
+        } catch (NumberFormatException e) {
+            LOGGER.trace("Not both bigdecimal.", e);
+            // not both bigDecimal.
+        }
+        return false;
+    }
+
     @Override
     public boolean isValid(Observation obs) throws ProcessException {
         try {
@@ -55,7 +80,7 @@ public class ValidatorByPhenTime implements Validator {
                 if (first == null) {
                     return true;
                 } else {
-                    if (!obs.getResult().equals(first.getResult())) {
+                    if (!resultCompare(obs.getResult(), first.getResult())) {
                         LOGGER.warn("Observation {} with given phenomenonTime {} exists, but result not the same. {} != {}.", first.getId(), obs.getPhenomenonTime(), obs.getResult(), first.getResult());
                         if (update) {
                             obs.setId(first.getId());
@@ -71,7 +96,7 @@ public class ValidatorByPhenTime implements Validator {
                 if (first == null) {
                     return true;
                 } else {
-                    if (!obs.getResult().equals(first.getResult())) {
+                    if (!resultCompare(obs.getResult(), first.getResult())) {
                         if (update) {
                             LOGGER.debug("Observation {} with given phenomenonTime {} exists. Result not the same. Updating. {} != {}.", first.getId(), obs.getPhenomenonTime(), obs.getResult(), first.getResult());
                             obs.setId(first.getId());
