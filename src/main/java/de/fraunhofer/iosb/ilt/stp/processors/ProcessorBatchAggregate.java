@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -302,7 +303,7 @@ public class ProcessorBatchAggregate implements Processor {
 
     }
 
-    private void calculateAggregates(Set<AggregateCombo> targets) {
+    private void calculateAggregates(Collection<AggregateCombo> targets) {
         for (AggregateCombo target : targets) {
             try {
                 calculateAggregates(target);
@@ -327,6 +328,11 @@ public class ProcessorBatchAggregate implements Processor {
             String path = entry.getKey();
             LOGGER.debug("Subscribing to: {}", path);
             final List<AggregateCombo> combos = entry.getValue();
+
+            // First make sure we are up-to-date.
+            calculateAggregates(combos);
+
+            // Then add the subscription.
             mqttClient.subscribe(path, (String topic, MqttMessage message) -> {
                 if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
                     int count = messagesCount.getAndIncrement();
