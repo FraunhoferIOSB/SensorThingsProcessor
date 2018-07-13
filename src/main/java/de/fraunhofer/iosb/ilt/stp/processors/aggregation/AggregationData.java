@@ -7,7 +7,7 @@ import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.model.ext.EntityList;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.aggregation.Utils;
-import de.fraunhofer.iosb.ilt.stp.sta.SensorThingsUtils;
+import de.fraunhofer.iosb.ilt.stp.utils.SensorThingsUtils;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;

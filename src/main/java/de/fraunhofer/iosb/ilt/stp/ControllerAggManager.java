@@ -3,17 +3,22 @@ package de.fraunhofer.iosb.ilt.stp;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
+import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.model.ObservedProperty;
+import de.fraunhofer.iosb.ilt.sta.model.TimeObject;
 import de.fraunhofer.iosb.ilt.sta.model.ext.UnitOfMeasurement;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregateCombo;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationBase;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationData;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationLevel;
-import de.fraunhofer.iosb.ilt.stp.sta.SensorThingsUtils;
+import de.fraunhofer.iosb.ilt.stp.utils.ButtonTableCell;
+import de.fraunhofer.iosb.ilt.stp.utils.DateTimePicker;
+import de.fraunhofer.iosb.ilt.stp.utils.SensorThingsUtils;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.value.ObservableValue;
+import javafx.beans.value.ObservableValueBase;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -30,13 +38,17 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.threeten.extra.Interval;
 
 /**
  *
@@ -48,6 +60,13 @@ public class ControllerAggManager implements Initializable {
      * The logger for this class.
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(ControllerAggManager.class);
+
+    private static final ObservableValue<Void> OBSERVABLE_VOID = new ObservableValueBase<Void>() {
+        @Override
+        public Void getValue() {
+            return null;
+        }
+    };
 
     @FXML
     private BorderPane paneAddLevel;
@@ -72,9 +91,12 @@ public class ControllerAggManager implements Initializable {
     private AggregationData data;
 
     private TableColumn<AggregationBase, String> baseColumn;
+    private TableColumn<AggregationBase, AggregationBase> buttonColumn;
     private Map<AggregationLevel, TableColumn<AggregationBase, Boolean>> columnsByLevel = new HashMap<>();
     private EditorMap<?> levelEditor;
     private SensorThingsUtils utils = new SensorThingsUtils();
+    private Instant lastPickedStart;
+    private Instant lastPickedEnd;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -97,11 +119,72 @@ public class ControllerAggManager implements Initializable {
         return column;
     }
 
+    private void reCalculateBase(AggregationBase base, Instant start, Instant end) {
+        try {
+            Datastream baseDs = base.getBaseDatastream();
+            if (baseDs == null) {
+                LOGGER.error("No base Datastream for {}", base.getBaseName());
+            }
+            Observation dummy = new Observation("Dummy", baseDs);
+            dummy.setPhenomenonTime(new TimeObject(Interval.of(start, end)));
+
+            service.create(dummy);
+            service.delete(dummy);
+        } catch (ServiceFailureException ex) {
+            LOGGER.error("Failed to create or delete dummy observation!", ex);
+        }
+    }
+
+    private void reCalculateBase(AggregationBase base) {
+        DateTimePicker startTime = new DateTimePicker(lastPickedStart);
+        DateTimePicker endTime = new DateTimePicker(lastPickedEnd);
+
+        GridPane pane = new GridPane();
+        int row = 0;
+        pane.add(new Text(base.getBaseName()), 0, row, 2, 1);
+        pane.add(new Text("From"), 0, ++row);
+        pane.add(startTime, 1, row);
+
+        pane.add(new Text("To"), 0, ++row);
+        pane.add(endTime, 1, row);
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setResizable(true);
+        dialog.setTitle("Re-Calculate which Period?");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.APPLY);
+        dialog.getDialogPane().setContent(pane);
+        dialog.getDialogPane().setExpandableContent(new Text("This will create a new Observation in the given Datastream, and directly delete it again."));
+        Optional<ButtonType> confirmation = dialog.showAndWait();
+
+        Instant startDateTime = startTime.getValue().toInstant();
+        lastPickedStart = startDateTime;
+        Instant endDateTime = endTime.getValue().toInstant();
+        lastPickedEnd = endDateTime;
+
+        if (confirmation.isPresent() && confirmation.get() == ButtonType.APPLY) {
+            LOGGER.info("Re-Calculating from {} to {} for {}", startDateTime, endDateTime, base.getBaseName());
+            reCalculateBase(base, startDateTime, endDateTime);
+        } else {
+            LOGGER.info("Cancelled...  {} to {} for {}", startDateTime, endDateTime, base.getBaseName());
+        }
+    }
+
     @FXML
     private void actionReload(ActionEvent event) {
         try {
+            columnsByLevel.clear();
             baseColumn = new TableColumn("Base Name");
             baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getBaseNameProperty());
+
+            buttonColumn = new TableColumn<>("🔃");
+            buttonColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, AggregationBase> param) -> new ReadOnlyObjectWrapper<>(param.getValue()));
+            buttonColumn.setCellFactory((final TableColumn<AggregationBase, AggregationBase> param) -> new ButtonTableCell<AggregationBase, AggregationBase>("🔃") {
+                @Override
+                public void onAction(TableRow<AggregationBase> row) {
+                    reCalculateBase(row.getItem());
+                }
+            });
 
             String urlString = textUrl.getText();
             service = new SensorThingsService(new URL(urlString));
@@ -114,6 +197,7 @@ public class ControllerAggManager implements Initializable {
 
             table.getColumns().clear();
             table.getColumns().add(baseColumn);
+            table.getColumns().add(buttonColumn);
             table.getColumns().addAll(columnsByLevel.values());
 
             table.setItems(data.getAggregationBases());
