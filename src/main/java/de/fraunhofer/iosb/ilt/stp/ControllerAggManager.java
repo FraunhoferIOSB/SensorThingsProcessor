@@ -37,8 +37,10 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
-import javafx.scene.control.TableCell;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -48,7 +50,6 @@ import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.Text;
-import javafx.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -109,21 +110,53 @@ public class ControllerAggManager implements Initializable {
         paneAddLevel.setCenter(node);
     }
 
+    private void addMenuToColumn(final TableColumn<AggregationBase, Boolean> column, final AggregationLevel level) {
+        MenuItem addAll = new MenuItem("Check All");
+        addAll.setOnAction((event) -> {
+            setAllOnColumn(column, level, true);
+        });
+        MenuItem removeAll = new MenuItem("Un-Check All");
+        removeAll.setOnAction((event) -> {
+            setAllOnColumn(column, level, false);
+        });
+        MenuItem addSelected = new MenuItem("Check Selected");
+        addSelected.setOnAction((event) -> {
+            setSelectedOnColumn(column, level, true);
+        });
+        MenuItem removeSelected = new MenuItem("Un-Check Selected");
+        removeSelected.setOnAction((event) -> {
+            setSelectedOnColumn(column, level, false);
+        });
+        ContextMenu menu = new ContextMenu(addAll, removeAll, addSelected, removeSelected);
+
+        column.setContextMenu(menu);
+    }
+
+    private void setAllOnColumn(TableColumn<AggregationBase, Boolean> column, final AggregationLevel level, boolean enabled) {
+        for (AggregationBase item : column.getTableView().getItems()) {
+            item.getLevelProperty(level).set(enabled);
+        }
+    }
+
+    private void setSelectedOnColumn(TableColumn<AggregationBase, Boolean> column, final AggregationLevel level, boolean enabled) {
+        for (AggregationBase item : column.getTableView().getSelectionModel().getSelectedItems()) {
+            item.getLevelProperty(level).set(enabled);
+        }
+    }
+
     private TableColumn<AggregationBase, Boolean> getColumnForLevel(final AggregationLevel level) {
         TableColumn<AggregationBase, Boolean> column = columnsByLevel.get(level);
         if (column == null) {
             LOGGER.info("Creating column {}.", level);
             column = new TableColumn(level.toString());
-            column.setCellFactory(new Callback<TableColumn<AggregationBase, Boolean>, TableCell<AggregationBase, Boolean>>() {
-                @Override
-                public TableCell<AggregationBase, Boolean> call(TableColumn<AggregationBase, Boolean> param) {
-                    CheckBoxTableCell<AggregationBase, Boolean> cell = new CheckBoxTableCell<>();
-                    cell.setAlignment(Pos.CENTER);
-                    return cell;
-                }
+            column.setCellFactory((TableColumn<AggregationBase, Boolean> param) -> {
+                CheckBoxTableCell<AggregationBase, Boolean> cell = new CheckBoxTableCell<>();
+                cell.setAlignment(Pos.CENTER);
+                return cell;
             });
             column.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, Boolean> param) -> param.getValue().getLevelProperty(level));
             column.setEditable(true);
+            addMenuToColumn(column, level);
             columnsByLevel.put(level, column);
         }
         return column;
@@ -209,8 +242,9 @@ public class ControllerAggManager implements Initializable {
             table.getColumns().add(baseColumn);
             table.getColumns().add(buttonColumn);
             table.getColumns().addAll(columnsByLevel.values());
-
+            table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             table.setItems(data.getAggregationBases());
+
         } catch (MalformedURLException | URISyntaxException ex) {
             LOGGER.error("Failed to parse url.", ex);
             new Alert(Alert.AlertType.ERROR, "Failed to parse URL", ButtonType.OK).show();
@@ -223,7 +257,11 @@ public class ControllerAggManager implements Initializable {
         AggregationLevel level = new AggregationLevel();
         level.configure(levelEditor.getConfig(), null, null);
         TableColumn<AggregationBase, Boolean> column = getColumnForLevel(level);
-        table.getColumns().add(column);
+        if (table.getColumns().contains(column)) {
+            LOGGER.info("Column {} already exists.", level);
+        } else {
+            table.getColumns().add(column);
+        }
     }
 
     @FXML
