@@ -186,6 +186,7 @@ public class ProcessorBatchAggregate implements Processor {
         orderDelay = Duration.ofMillis(editorDelay.getValue().longValue());
         fixReferences = editorFixReferences.getValue();
         aggregationData = new AggregationData(stsSource, fixReferences);
+        aggregationData.setZoneId(zoneId);
     }
 
     @Override
@@ -196,7 +197,7 @@ public class ProcessorBatchAggregate implements Processor {
             editorServiceSource = new EditorClass<>(stsSource, null, Service.class, "Source Service", "The service to read observations from.");
             editor.addOption("source", editorServiceSource, false);
 
-            editorTimeZone = new EditorString("Europe/Amsterdam", 1, "TimeZone", "The timezone to use when determining the start of the day,hour,etc.");
+            editorTimeZone = new EditorString("+1", 1, "TimeZone", "The timezone to use when determining the start of the day,hour,etc.");
             editor.addOption("timeZone", editorTimeZone, true);
 
             editorDelay = new EditorInt(0, 999999, 1, 10000, "Delay", "The number of milliseconds to delay calculations with, in order to avoid duplicate calculations.");

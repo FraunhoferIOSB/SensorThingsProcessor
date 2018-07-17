@@ -333,4 +333,8 @@ public class AggregationData {
         }
     }
 
+    public void setZoneId(ZoneId zoneId) {
+        this.zoneId = zoneId;
+    }
+
 }
