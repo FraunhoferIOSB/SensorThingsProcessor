@@ -243,7 +243,12 @@ public class ProcessorBatchAggregate implements Processor {
             LOGGER.error("Failed to calculate statistics for " + combo.toString() + " interval " + interval, exc);
             return;
         }
-        Observation newObs = new Observation(result, combo.target);
+        BigDecimal[] sizedResult = new BigDecimal[combo.target.getMultiObservationDataTypes().size()];
+        int length = Math.min(sizedResult.length, result.length);
+        for (int i = 0; i < length; i++) {
+            sizedResult[i] = result[i];
+        }
+        Observation newObs = new Observation(sizedResult, combo.target);
         Map<String, Object> parameters = new HashMap<>();
         for (Observation sourceOb : sourceObs) {
             Map<String, Object> otherParams = sourceOb.getParameters();
