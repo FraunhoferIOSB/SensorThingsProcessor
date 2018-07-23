@@ -33,6 +33,9 @@ public class Aggregator {
     }
 
     private BigDecimal handleResult(Object result) {
+        if (result == null) {
+            return null;
+        }
         if (result instanceof BigDecimal) {
             return (BigDecimal) result;
         }

@@ -254,7 +254,7 @@ public class AggregationData {
     }
 
     public Map<String, AggregationBase> getCombosByBase() {
-        if (aggregationBasesByName == null) {
+        if (aggregationBasesByName.isEmpty()) {
             gatherData();
         }
         return aggregationBasesByName;
