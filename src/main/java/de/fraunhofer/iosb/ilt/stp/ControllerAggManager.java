@@ -1,5 +1,6 @@
 package de.fraunhofer.iosb.ilt.stp;
 
+import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
@@ -12,11 +13,10 @@ import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregateCombo;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationBase;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationData;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationLevel;
+import de.fraunhofer.iosb.ilt.stp.sta.Service;
 import de.fraunhofer.iosb.ilt.stp.utils.ButtonTableCell;
 import de.fraunhofer.iosb.ilt.stp.utils.DateTimePicker;
 import de.fraunhofer.iosb.ilt.stp.utils.SensorThingsUtils;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -34,7 +34,6 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
@@ -98,16 +97,22 @@ public class ControllerAggManager implements Initializable {
     private TableColumn<AggregationBase, AggregationBase> buttonColumn;
     private Map<AggregationLevel, TableColumn<AggregationBase, Boolean>> columnsByLevel = new HashMap<>();
     private EditorMap<?> levelEditor;
+    private ConfigEditor<?> serivceEditor;
     private SensorThingsUtils utils = new SensorThingsUtils();
     private Instant lastPickedStart;
     private Instant lastPickedEnd;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        buttonReload.setDisable(true);
+
         AggregationLevel level = new AggregationLevel(ChronoUnit.HOURS, 1);
         levelEditor = level.getConfigEditor(null, null);
         Node node = levelEditor.getGuiFactoryFx().getNode();
         paneAddLevel.setCenter(node);
+
+        Service tempService = new Service();
+        serivceEditor = tempService.getConfigEditor(null, null);
     }
 
     private void addMenuToColumn(final TableColumn<AggregationBase, Boolean> column, final AggregationLevel level) {
@@ -214,41 +219,53 @@ public class ControllerAggManager implements Initializable {
     }
 
     @FXML
-    private void actionReload(ActionEvent event) {
-        try {
-            columnsByLevel.clear();
-            baseColumn = new TableColumn("Base Name");
-            baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getBaseNameProperty());
+    private void actionService(ActionEvent event) {
+        Node node = serivceEditor.getGuiFactoryFx().getNode();
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setResizable(true);
+        dialog.setTitle("Configure SensorThings Service");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.APPLY);
+        dialog.getDialogPane().setContent(node);
 
-            buttonColumn = new TableColumn<>("🔃");
-            buttonColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, AggregationBase> param) -> new ReadOnlyObjectWrapper<>(param.getValue()));
-            buttonColumn.setCellFactory((final TableColumn<AggregationBase, AggregationBase> param) -> new ButtonTableCell<AggregationBase, AggregationBase>("🔃") {
-                @Override
-                public void onAction(TableRow<AggregationBase> row) {
-                    reCalculateBase(row.getItem());
-                }
-            });
-
-            String urlString = textUrl.getText();
-            service = new SensorThingsService(new URL(urlString));
-            data = new AggregationData(service, true, true);
-            for (AggregationBase base : data.getAggregationBases()) {
-                for (AggregateCombo combo : base.getCombos()) {
-                    getColumnForLevel(combo.level);
-                }
-            }
-
-            table.getColumns().clear();
-            table.getColumns().add(baseColumn);
-            table.getColumns().add(buttonColumn);
-            table.getColumns().addAll(columnsByLevel.values());
-            table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-            table.setItems(data.getAggregationBases());
-
-        } catch (MalformedURLException | URISyntaxException ex) {
-            LOGGER.error("Failed to parse url.", ex);
-            new Alert(Alert.AlertType.ERROR, "Failed to parse URL", ButtonType.OK).show();
+        Optional<ButtonType> confirmation = dialog.showAndWait();
+        if (confirmation.isPresent() && confirmation.get() == ButtonType.APPLY) {
+            Service tempService = new Service();
+            service = new SensorThingsService();
+            tempService.configure(serivceEditor.getConfig(), service, null);
+            textUrl.setText(service.getEndpoint().toString());
+            buttonReload.setDisable(false);
         }
+    }
+
+    @FXML
+    private void actionReload(ActionEvent event) {
+        if (service == null) {
+            return;
+        }
+        columnsByLevel.clear();
+        baseColumn = new TableColumn("Base Name");
+        baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getBaseNameProperty());
+        buttonColumn = new TableColumn<>("🔃");
+        buttonColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, AggregationBase> param) -> new ReadOnlyObjectWrapper<>(param.getValue()));
+        buttonColumn.setCellFactory((final TableColumn<AggregationBase, AggregationBase> param) -> new ButtonTableCell<AggregationBase, AggregationBase>("🔃") {
+            @Override
+            public void onAction(TableRow<AggregationBase> row) {
+                reCalculateBase(row.getItem());
+            }
+        });
+        data = new AggregationData(service, true, true);
+        for (AggregationBase base : data.getAggregationBases()) {
+            for (AggregateCombo combo : base.getCombos()) {
+                getColumnForLevel(combo.level);
+            }
+        }
+        table.getColumns().clear();
+        table.getColumns().add(baseColumn);
+        table.getColumns().add(buttonColumn);
+        table.getColumns().addAll(columnsByLevel.values());
+        table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        table.setItems(data.getAggregationBases());
 
     }
 
