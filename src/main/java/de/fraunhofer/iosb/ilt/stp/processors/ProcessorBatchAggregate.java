@@ -2,11 +2,12 @@ package de.fraunhofer.iosb.ilt.stp.processors;
 
 import com.google.common.collect.ComparisonChain;
 import com.google.gson.JsonElement;
-import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
+import de.fraunhofer.iosb.ilt.configurable.AbstractConfigurable;
+import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
+import de.fraunhofer.iosb.ilt.configurable.editor.EditorLong;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
@@ -25,11 +26,13 @@ import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationData;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.Aggregator;
 import de.fraunhofer.iosb.ilt.stp.sta.Service;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,7 +59,7 @@ import org.threeten.extra.Interval;
  *
  * @author scf
  */
-public class ProcessorBatchAggregate implements Processor {
+public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> implements Processor {
 
     /**
      * The logger for this class.
@@ -151,22 +154,47 @@ public class ProcessorBatchAggregate implements Processor {
 
     }
 
-    private EditorMap<Map<String, Object>> editor;
-    private EditorClass<SensorThingsService, Object, Service> editorServiceSource;
-    private EditorString editorTimeZone;
-    private EditorInt editorDelay;
-    private EditorInt editorThreadCount;
-    private EditorBoolean editorFixReferences;
+    @ConfigurableField(editor = EditorClass.class,
+            label = "Service", description = "The service to read observations from.",
+            jsonField = "source")
+    @EditorClass.EdOptsClass(clazz = Service.class)
+    private Service sourceService;
+
+    @ConfigurableField(editor = EditorString.class,
+            label = "TimeZone", description = "The timezone to use when determining the start of the day,hour,etc.",
+            optional = true)
+    @EditorString.EdOptsString(dflt = "+1")
+    private String timeZone;
+
+    @ConfigurableField(editor = EditorLong.class,
+            label = "Delay", description = "The number of milliseconds to delay calculations with, in order to avoid duplicate calculations.",
+            optional = true)
+    @EditorLong.EdOptsLong(dflt = 10000, min = 0, max = 999999)
+    private long delay;
+
+    @ConfigurableField(editor = EditorBoolean.class,
+            label = "Fix References", description = "Fix the references between aggregate multidatastreams.", optional = true)
+    @EditorBoolean.EdOptsBool(dflt = true)
+    private boolean fixRefs;
+
+    @ConfigurableField(editor = EditorInt.class,
+            label = "Thread Count", description = "The number of simultanious calculations to run in parallel.", optional = true)
+    @EditorInt.EdOptsInt(dflt = 2, min = 1, max = 99, step = 1)
+    private int threads;
+
+    @ConfigurableField(editor = EditorBoolean.class,
+            label = "Cache", description = "Cache observations (only do this if there are no overlapping observations).", optional = true)
+    @EditorBoolean.EdOptsBool(dflt = false)
+    private boolean cacheObs;
+
+    private final Map<Id, WeakReference<Observation>> obsCache = new HashMap<>();
 
     private boolean noAct = false;
-    private SensorThingsService stsSource;
-    private Service sourceService;
-    private AggregationData aggregationData;
-
     private Duration orderDelay;
     private ZoneId zoneId;
-    private boolean fixReferences;
     private MqttClient mqttClient;
+    private SensorThingsService stsSource;
+    private AggregationData aggregationData;
 
     private BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
     private AtomicInteger messagesCount = new AtomicInteger(0);
@@ -179,38 +207,15 @@ public class ProcessorBatchAggregate implements Processor {
 
     @Override
     public void configure(JsonElement config, Void context, Void edtCtx) {
-        stsSource = new SensorThingsService();
-        getConfigEditor(context, edtCtx).setConfig(config);
-        sourceService = editorServiceSource.getValue();
-        zoneId = ZoneId.of(editorTimeZone.getValue());
+        super.configure(config, context, edtCtx);
+        stsSource = sourceService.getService();
+
+        zoneId = ZoneId.of(timeZone);
         sourceService.setNoAct(noAct);
-        orderDelay = Duration.ofMillis(editorDelay.getValue().longValue());
-        fixReferences = editorFixReferences.getValue();
-        aggregationData = new AggregationData(stsSource, fixReferences);
+        orderDelay = Duration.ofMillis(delay);
+
+        aggregationData = new AggregationData(stsSource, fixRefs);
         aggregationData.setZoneId(zoneId);
-    }
-
-    @Override
-    public ConfigEditor<?> getConfigEditor(Void context, Void edtCtx) {
-        if (editor == null) {
-            editor = new EditorMap<>();
-
-            editorServiceSource = new EditorClass<>(stsSource, null, Service.class, "Source Service", "The service to read observations from.");
-            editor.addOption("source", editorServiceSource, false);
-
-            editorTimeZone = new EditorString("+1", 1, "TimeZone", "The timezone to use when determining the start of the day,hour,etc.");
-            editor.addOption("timeZone", editorTimeZone, true);
-
-            editorDelay = new EditorInt(0, 999999, 1, 10000, "Delay", "The number of milliseconds to delay calculations with, in order to avoid duplicate calculations.");
-            editor.addOption("delay", editorDelay, true);
-
-            editorThreadCount = new EditorInt(0, 10, 1, 2, "Thread Count", "The number of simultanious calculations to run in parallel.");
-            editor.addOption("threads", editorThreadCount, true);
-
-            editorFixReferences = new EditorBoolean(false, "Fix References", "Fix the references between aggregate multidatastreams.");
-            editor.addOption("fixRefs", editorFixReferences, true);
-        }
-        return editor;
     }
 
     @Override
@@ -221,10 +226,39 @@ public class ProcessorBatchAggregate implements Processor {
         }
     }
 
+    private List<Observation> findObservations(AggregateCombo combo, Instant start, Instant end) {
+        if (cacheObs && combo.getSourceType() == EntityType.DATASTREAM) {
+            WeakReference<Observation> weakRef;
+            synchronized (obsCache) {
+                weakRef = obsCache.get(combo.getSourceId());
+            }
+            if (weakRef != null) {
+                Observation cachedObs = weakRef.get();
+                if (cachedObs != null) {
+                    Interval phenTime = cachedObs.getPhenomenonTime().getAsInterval();
+                    if (phenTime.contains(start) && phenTime.contains(end)) {
+                        LOGGER.debug("Using cached observation for {}  ->  {}", start, end);
+                        return Arrays.asList(cachedObs);
+                    }
+                }
+            }
+        }
+        List<Observation> obsList = combo.getObservationsForSource(start, end);
+        if (cacheObs && combo.getSourceType() == EntityType.DATASTREAM && !obsList.isEmpty()) {
+            Observation lastObs = obsList.get(obsList.size() - 1);
+            if (lastObs.getPhenomenonTime().isInterval()) {
+                synchronized (obsCache) {
+                    obsCache.put(combo.getSourceId(), new WeakReference<>(lastObs));
+                }
+            }
+        }
+        return obsList;
+    }
+
     private void calculateAggregate(AggregateCombo combo, Interval interval) throws ServiceFailureException, ProcessException {
         Instant start = interval.getStart();
         Instant end = interval.getEnd();
-        List<Observation> sourceObs = combo.getObservationsForSource(start, end);
+        List<Observation> sourceObs = findObservations(combo, start, end);
         LOGGER.info("Calculating {} using {} obs for {}.", interval, sourceObs.size(), combo);
         if (sourceObs.isEmpty()) {
             return;
@@ -444,7 +478,7 @@ public class ProcessorBatchAggregate implements Processor {
             startProcessors();
             if (messageReceptionService == null) {
                 messageReceptionService = ProcessorHelper.createProcessors(
-                        editorThreadCount.getValue(),
+                        threads,
                         messagesToHandle, (MessageContext x) -> {
                             messagesCount.decrementAndGet();
                             createOrderFor(x.combos, x.message);
@@ -483,7 +517,7 @@ public class ProcessorBatchAggregate implements Processor {
     private synchronized void startProcessors() {
         if (orderExecutorService == null) {
             orderExecutorService = ProcessorHelper.createProcessors(
-                    editorThreadCount.getValue(),
+                    threads,
                     orderQueue,
                     x -> x.execute(),
                     "Aggregator");

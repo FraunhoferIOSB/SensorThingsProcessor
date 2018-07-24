@@ -94,6 +94,9 @@ public class Service implements Configurable<SensorThingsService, Object> {
     @Override
     public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
         service = context;
+        if (service == null) {
+            service = new SensorThingsService();
+        }
         getConfigEditor(service, edtCtx).setConfig(config);
         dataArray = editorUseDataArray.getValue();
         try {
