@@ -175,6 +175,7 @@ public class ProcessorBatchAggregate implements Processor {
     private ExecutorService orderExecutorService;
     private ExecutorService messageReceptionService;
     private Aggregator aggregator = new Aggregator();
+    private boolean running = false;
 
     @Override
     public void configure(JsonElement config, Void context, Void edtCtx) {
@@ -303,7 +304,7 @@ public class ProcessorBatchAggregate implements Processor {
                 return;
             }
 
-            calculateAggregate(combo, Interval.of(calcIntervalStart, calcIntervalEnd));
+            createOrderForDirectExecution(combo, Interval.of(calcIntervalStart, calcIntervalEnd));
             calcIntervalStart = calcIntervalEnd;
         }
 
@@ -398,6 +399,18 @@ public class ProcessorBatchAggregate implements Processor {
         }
     }
 
+    private void createOrderForDirectExecution(AggregateCombo combo, Interval interval) {
+        CalculationOrder order = new CalculationOrder(combo, interval, Instant.now());
+        while (orderQueue.size() > 1000) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException exc) {
+                LOGGER.warn("Rude wakeup.", exc);
+            }
+        }
+        offerOrder(order);
+    }
+
     private boolean offerOrder(CalculationOrder order) {
         if (orders.contains(order)) {
             return false;
@@ -416,25 +429,28 @@ public class ProcessorBatchAggregate implements Processor {
 
     @Override
     public void process() {
+        startProcessors();
         calculateAggregates(aggregationData);
+        if (!running) {
+            stopProcessors(30);
+        }
     }
 
     @Override
     public void startListening() {
+        running = true;
         try {
             mqttClient = sourceService.getMqttClient();
-            orderExecutorService = ProcessorHelper.createProcessors(
-                    editorThreadCount.getValue(),
-                    orderQueue,
-                    x -> x.execute(),
-                    "Aggregator");
-            messageReceptionService = ProcessorHelper.createProcessors(
-                    editorThreadCount.getValue(),
-                    messagesToHandle, (MessageContext x) -> {
-                        messagesCount.decrementAndGet();
-                        createOrderFor(x.combos, x.message);
-                    },
-                    "Receiver");
+            startProcessors();
+            if (messageReceptionService == null) {
+                messageReceptionService = ProcessorHelper.createProcessors(
+                        editorThreadCount.getValue(),
+                        messagesToHandle, (MessageContext x) -> {
+                            messagesCount.decrementAndGet();
+                            createOrderFor(x.combos, x.message);
+                        },
+                        "Receiver");
+            }
             createSubscriptions(aggregationData);
         } catch (MqttException ex) {
             throw new IllegalArgumentException(ex);
@@ -443,6 +459,7 @@ public class ProcessorBatchAggregate implements Processor {
 
     @Override
     public void stopListening() {
+        running = false;
         try {
             if (mqttClient.isConnected()) {
                 LOGGER.info("Stopping MQTT client.");
@@ -457,13 +474,26 @@ public class ProcessorBatchAggregate implements Processor {
                 LOGGER.info("Stopping Receivers.");
                 ProcessorHelper.shutdownProcessors(messageReceptionService, messagesToHandle, 5, TimeUnit.SECONDS);
             }
-            if (orderExecutorService != null) {
-                LOGGER.info("Stopping Processors.");
-                ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, 5, TimeUnit.SECONDS);
-            }
+            stopProcessors(5);
         } catch (MqttException ex) {
             LOGGER.error("Problem while disconnecting!", ex);
         }
     }
 
+    private synchronized void startProcessors() {
+        if (orderExecutorService == null) {
+            orderExecutorService = ProcessorHelper.createProcessors(
+                    editorThreadCount.getValue(),
+                    orderQueue,
+                    x -> x.execute(),
+                    "Aggregator");
+        }
+    }
+
+    private synchronized void stopProcessors(long waitSeconds) {
+        if (orderExecutorService != null) {
+            LOGGER.info("Stopping Processors.");
+            ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, waitSeconds, TimeUnit.SECONDS);
+        }
+    }
 }
