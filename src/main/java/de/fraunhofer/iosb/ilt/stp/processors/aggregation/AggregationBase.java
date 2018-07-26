@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2018 Fraunhofer IOSB
+ * Copyright (C) 2018 Fraunhofer Institut IOSB, Fraunhoferstr. 1, D 76131
+ * Karlsruhe, Germany.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
