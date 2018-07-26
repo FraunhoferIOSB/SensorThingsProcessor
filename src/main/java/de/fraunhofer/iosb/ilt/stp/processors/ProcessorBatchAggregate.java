@@ -25,6 +25,7 @@ import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationBase;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationData;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.Aggregator;
 import de.fraunhofer.iosb.ilt.stp.sta.Service;
+import de.fraunhofer.iosb.ilt.stp.utils.MergeQueue;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
@@ -32,14 +33,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.Delayed;
@@ -199,7 +203,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
     private AtomicInteger messagesCount = new AtomicInteger(0);
     private Set<CalculationOrder> orders = new HashSet<>();
-    private DelayQueue<CalculationOrder> orderQueue = new DelayQueue<>();
+    private BlockingQueue<CalculationOrder> orderQueue;
+    private MergeQueue<CalculationOrder> orderMerger;
     private ExecutorService orderExecutorService;
     private ExecutorService messageReceptionService;
     private Aggregator aggregator = new Aggregator();
@@ -298,7 +303,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         sourceService.addObservation(newObs);
     }
 
-    private void calculateAggregates(AggregateCombo combo) throws ServiceFailureException, ProcessException {
+    private void calculateAggregates(BlockingQueue<CalculationOrder> queue, AggregateCombo combo) throws ServiceFailureException, ProcessException {
         Observation lastAggObs = combo.getLastForTarget();
 
         Instant calcIntervalStart;
@@ -338,16 +343,16 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 return;
             }
 
-            createOrderForDirectExecution(combo, Interval.of(calcIntervalStart, calcIntervalEnd));
+            createOrderForDirectExecution(queue, combo, Interval.of(calcIntervalStart, calcIntervalEnd));
             calcIntervalStart = calcIntervalEnd;
         }
 
     }
 
-    private void calculateAggregates(Collection<AggregateCombo> targets) {
+    private void calculateAggregates(BlockingQueue<CalculationOrder> queue, Collection<AggregateCombo> targets) {
         for (AggregateCombo target : targets) {
             try {
-                calculateAggregates(target);
+                calculateAggregates(queue, target);
             } catch (ServiceFailureException | ProcessException ex) {
                 LOGGER.error("Error calculating for: " + target, ex);
             }
@@ -356,8 +361,39 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     private void calculateAggregates(AggregationData aggregationData) {
         Map<String, AggregationBase> targets = aggregationData.getCombosByBase();
-        for (AggregationBase target : targets.values()) {
-            calculateAggregates(target.getCombos());
+        final Iterator<AggregationBase> it = targets.values().iterator();
+        final List<Thread> threadList = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    BlockingQueue<CalculationOrder> queue = new ArrayBlockingQueue<>(100);
+                    orderMerger.addQueue(queue);
+                    boolean moreWork = true;
+                    while (moreWork) {
+                        AggregationBase nextBase;
+                        synchronized (it) {
+                            if (it.hasNext()) {
+                                nextBase = it.next();
+                            } else {
+                                LOGGER.warn("Nothing more to do...");
+                                break;
+                            }
+                        }
+                        calculateAggregates(queue, nextBase.getCombos());
+                    }
+                    orderMerger.removeQueue(queue);
+                }
+            });
+            threadList.add(t);
+            t.start();
+        }
+        for (Thread thread : threadList) {
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                LOGGER.error("Interrupted while waiting for threads!");
+            }
         }
     }
 
@@ -371,7 +407,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             final List<AggregateCombo> combos = entry.getValue();
 
             // First make sure we are up-to-date.
-            calculateAggregates(combos);
+            calculateAggregates(orderQueue, combos);
 
             // Then add the subscription.
             mqttClient.subscribe(path, (String topic, MqttMessage message) -> {
@@ -433,16 +469,15 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
     }
 
-    private void createOrderForDirectExecution(AggregateCombo combo, Interval interval) {
+    private void createOrderForDirectExecution(BlockingQueue<CalculationOrder> queue, AggregateCombo combo, Interval interval) {
         CalculationOrder order = new CalculationOrder(combo, interval, Instant.now());
-        while (orderQueue.size() > 1000) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException exc) {
-                LOGGER.warn("Rude wakeup.", exc);
+        try {
+            while (!queue.offer(order, 1, TimeUnit.SECONDS)) {
+                LOGGER.warn("Could not offer order for a full second...");
             }
+        } catch (InterruptedException exc) {
+            LOGGER.warn("Rude wakeup.", exc);
         }
-        offerOrder(order);
     }
 
     private boolean offerOrder(CalculationOrder order) {
@@ -463,6 +498,9 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     @Override
     public void process() {
+        orderQueue = new ArrayBlockingQueue<>(200 * threads);
+        orderMerger = new MergeQueue<>(orderQueue);
+        orderMerger.start();
         startProcessors();
         calculateAggregates(aggregationData);
         if (!running) {
@@ -472,6 +510,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     @Override
     public void startListening() {
+        orderQueue = new DelayQueue<>();
         running = true;
         try {
             mqttClient = sourceService.getMqttClient();
@@ -525,6 +564,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     }
 
     private synchronized void stopProcessors(long waitSeconds) {
+        orderMerger.stop();
         if (orderExecutorService != null) {
             LOGGER.info("Stopping Processors.");
             ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, waitSeconds, TimeUnit.SECONDS);
