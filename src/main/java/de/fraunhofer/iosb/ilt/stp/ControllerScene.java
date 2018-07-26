@@ -73,6 +73,9 @@ public class ControllerScene implements Initializable {
     private void actionLoad(ActionEvent event) {
         fileChooser.setTitle("Load Config");
         File file = fileChooser.showOpenDialog(paneConfig.getScene().getWindow());
+        if (file == null) {
+            return;
+        }
         try {
             String config = FileUtils.readFileToString(file, "UTF-8");
             JsonElement json = new JsonParser().parse(config);

@@ -581,7 +581,9 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     }
 
     private synchronized void stopProcessors(long waitSeconds) {
-        orderMerger.stop();
+        if (orderMerger != null) {
+            orderMerger.stop();
+        }
         if (orderExecutorService != null) {
             LOGGER.info("Stopping Processors.");
             ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, waitSeconds, TimeUnit.SECONDS);

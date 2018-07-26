@@ -46,6 +46,7 @@ import java.util.ResourceBundle;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.value.ObservableValue;
 import javafx.beans.value.ObservableValueBase;
+import javafx.collections.FXCollections;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -282,7 +283,7 @@ public class ControllerAggManager implements Initializable {
         table.getColumns().add(buttonColumn);
         table.getColumns().addAll(columnsByLevel.values());
         table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        table.setItems(data.getAggregationBases());
+        table.setItems(FXCollections.observableArrayList(data.getAggregationBases()));
 
     }
 

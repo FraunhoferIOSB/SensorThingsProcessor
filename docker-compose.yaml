@@ -1,0 +1,7 @@
+version: '2'
+
+services:
+  processor:
+    image: fraunhoferiosb/frost-processor:latest
+    environment:
+      - 'processor_config={"uploader": {"className": "de.fraunhofer.iosb.ilt.stp.processors.ProcessorBatchAggregate","classConfig": {"delay": 10000,"timeZone": "Europe/Amsterdam","threads": 2,"source": {"mqttId": "Aggregator","serviceUrl": "http://10.1.4.117:8080/FROST-Server/v1.0","mqttUrl": "tcp://10.1.4.117:1883","validator": {"className": "de.fraunhofer.iosb.ilt.stp.validator.ValidatorByPhenTime","classConfig": {"update": true}}},"fixRefs": true} }}'

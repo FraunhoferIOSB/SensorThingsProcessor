@@ -17,6 +17,7 @@
  */
 package de.fraunhofer.iosb.ilt.stp;
 
+import com.google.common.base.Strings;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.stp.options.Option;
 import de.fraunhofer.iosb.ilt.stp.options.Parameter;
@@ -26,12 +27,42 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author scf
  */
 public class MainApp {
+
+    static final public String TAG_CONFIGURATION = "processor_config";
+    static final public String TAG_ONLINE = "processor_online";
+    static final public String TAG_DRY_RUN = "processor_dryrun";
+    /**
+     * The logger for this class.
+     */
+    private static final Logger LOGGER = LoggerFactory.getLogger(MainApp.class);
+
+    private static boolean getEnv(String name, boolean dflt) {
+        String value = System.getenv(name);
+        if (Strings.isNullOrEmpty(value)) {
+            LOGGER.info("Parameter {} not set, using default value: {}", name, dflt);
+            return dflt;
+        }
+        LOGGER.info("Parameter {} set with value: {}", name, value);
+        return Boolean.parseBoolean(value);
+    }
+
+    private static String getEnv(String name, String dflt) {
+        String value = System.getenv(name);
+        if (Strings.isNullOrEmpty(value)) {
+            LOGGER.info("Parameter {} not set, using default value: {}", name, dflt);
+            return dflt;
+        }
+        LOGGER.info("Parameter {} set with value: {}", name, value);
+        return value;
+    }
 
     /**
      * @param args the command line arguments
@@ -41,6 +72,14 @@ public class MainApp {
      * @throws ServiceFailureException
      */
     public static void main(String[] args) throws URISyntaxException, IOException, MalformedURLException, ServiceFailureException {
+        String configuration = getEnv(TAG_CONFIGURATION, "");
+        boolean onLine = getEnv(TAG_ONLINE, true);
+        boolean dryRun = getEnv(TAG_DRY_RUN, false);
+        if (!Strings.isNullOrEmpty(configuration)) {
+            ProcessorWrapper.importConfig(configuration, dryRun, onLine);
+            return;
+        }
+
         List<String> arguments = new ArrayList<>(Arrays.asList(args));
         if (arguments.isEmpty()) {
             showHelp();

@@ -34,8 +34,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +49,7 @@ public class AggregationData {
     private static final Logger LOGGER = LoggerFactory.getLogger(AggregationData.class);
 
     private final SensorThingsService service;
-    private ObservableList<AggregationBase> aggregationBases = FXCollections.observableArrayList();
+    private List<AggregationBase> aggregationBases = new ArrayList<>();
     private Map<String, AggregationBase> aggregationBasesByName = new HashMap<>();
     private Map<String, List<AggregateCombo>> combosBySource;
     private ZoneId zoneId;
@@ -263,7 +261,7 @@ public class AggregationData {
         LOGGER.info("Found {} unique source datastreams", combosBySource.size());
     }
 
-    public ObservableList<AggregationBase> getAggregationBases() {
+    public List<AggregationBase> getAggregationBases() {
         if (aggregationBases.isEmpty()) {
             gatherData();
         }

@@ -84,6 +84,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
     private synchronized void addShutdownHook() {
         if (this.shutdownHook == null) {
             this.shutdownHook = new Thread(() -> {
+                LOGGER.info("Shutting down...");
                 try {
                     if (processor != null) {
                         processor.stopListening();
@@ -108,9 +109,11 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
 
         processor.setNoAct(noAct);
         if (online || daemon) {
+            LOGGER.info("Processing in on-line mode...");
             addShutdownHook();
             processor.startListening();
         } else {
+            LOGGER.info("Processing in batch mode...");
             processor.process();
         }
 
