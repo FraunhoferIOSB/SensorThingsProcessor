@@ -1,0 +1,24 @@
+language: java
+jdk:
+- oraclejdk8
+
+branches:
+  only:
+  - master
+  - "/^v[0-9]+(\\.[0-9]+)+/"
+
+after_success:
+- mvn dockerfile:build
+- mvn dockerfile:tag@tag-version
+- mvn dockerfile:push@push-latest -Ddockerfile.useMavenSettingsForAuth=true --settings travis-settings.xml
+- mvn dockerfile:push@push-version -Ddockerfile.useMavenSettingsForAuth=true --settings travis-settings.xml
+
+services:
+- docker
+
+env:
+  global:
+  # travis encrypt DOCKER_USERNAME=[username]
+  - secure: "JoSPmPtjm7VI61u1ZLe6Vg8NXhQ1CgAJOnF4kICCxTRbHeN/0IrSbVFFemgkcGBgVc/1QfNdWLjXDU9kf4InbM3mVLfE6pDAa4sfTNHyHXOVfYnWepJTPefVjDwingHGarOyME4S/a6eJp3xFMMmXAvifxGPgtwbajLUOoCInCgqpm1iX1oYokNvvNLDkHJ1qVQ3bLT8ToZZJdrp0nVjrg5SqBZuG4ZaHLAGL277VkX6k3f1YaEIzFrioUHwJQ+k2A3j3scY3/zaovnnDLRy5rPAFIDuAOn9zV4fXUymhr6i2BKLvAeZ6YoyX+bKaXCCkSJF9ynruEHcvshGdujNS6zl/rwF68fjeFUZghnci7Ot5kE5w8XhcdFXMdzdNbhj5G1xoVgLyL5OB0xYPZ5UDx2pK3D7vF4uCaipPKQfaI4Hg9PC3norOoa7IbotmjyJdLcb1Wx1S0qoiWQD/fv2hoewniVWncJxvf4cYJMQFqmfwsI0LDV0xW2bpqpCPa86aHTQs6MEKKH2XfDq8PyVWVRczIWbevii+8ivjra90xMjercOTtw5MgPK70eWord3CYHiEMQd9z4TRXlhY0IEgWTdWzuUBY8qsAnJUhFLpMFd6rmVZaRKmZtsF7uonHTkqoqcItxNudBqa1a2KNsqcKWv7Pfn3998X6s16HYzzuw="
+  # travis encrypt DOCKER_PASSWORD=[password]
+  - secure: "GAkNfhy6cbxrwr4/SfLtmzcQ0fDHL0nqhyFjdJqOIahirR9NkULFjXjwy9P0S5EyVrg66uVo1pAg23ayEgogI+QJaGO3G3n52Iug5VSiPBb0GthxBBs8aQHT3P08h4KQ8GFBSlhvz6yOjMDIPoc78CFevErxOVepPJM04Y0p+tLvsIJ6bn2HtbeLRgx2voQUuWHMNpyAwvY/yT0ch3ZyndUSAZMk00a7x1DzcTMhixIYZwDI6BhzpS+McRTVzGZPiVtoKQYqOgNWQ+43R/SAZajJVT6YOdHcXjEVLctNy/Omv7TwYGGlf3lWtU2Xwogn/SwCttIkbejFfYc6J42HaKulIj95wvVhReoWxzvkHhyYkZ2CR2co2KlpTMT4umG4iE+Rvr0sksChG/ETy5KGcxaerpjTxHkCjCmlERlTJapYZ/NWh0u0bckAEnkOMjgbZkJPMfYLEk0yLjDbAGEAgYkiR6ySyh4oH5ZBsYf5kPBi9NkCE8UBjejpUKgeqr0QmXRxb+uUTdZYkU2FSil6lMvposF1bFt2hPwSh4H3iBbL9698OAihUD3t9fTN3b/lWgXwb2J/O2ykc4tA8dgcyxX5wgMjVjBdvGzcywspZLFWd/1HxHIfE8x/ET1MHnm/0S50Z0uEZeB015801/ispsszG3PTuwvv+d3lvU51Muw="
