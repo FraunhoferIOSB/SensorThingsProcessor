@@ -185,10 +185,12 @@ public class SensorThingsUtils {
 
     public void findOrCreateAggregateOps(SensorThingsService service, ObservedProperty op) throws ServiceFailureException {
         List<ObservedProperty> agList = aggregateProperties.get(op);
-        if (agList == null) {
-            agList = new ArrayList<>();
-            aggregateProperties.put(op, agList);
+        if (agList != null && agList.size() == 4) {
+            return;
         }
+        agList = new ArrayList<>();
+        aggregateProperties.put(op, agList);
+
         String opName = op.getName();
         String opDef = op.getDefinition();
         String opDesc = op.getDescription();
