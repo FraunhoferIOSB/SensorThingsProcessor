@@ -157,13 +157,13 @@ public class ControllerAggManager implements Initializable {
 
     private void setAllOnColumn(TableColumn<AggregationBase, Boolean> column, final AggregationLevel level, boolean enabled) {
         for (AggregationBase item : column.getTableView().getItems()) {
-            item.getLevelProperty(level).set(enabled);
+            item.getFxProperties().getLevelProperty(level).set(enabled);
         }
     }
 
     private void setSelectedOnColumn(TableColumn<AggregationBase, Boolean> column, final AggregationLevel level, boolean enabled) {
         for (AggregationBase item : column.getTableView().getSelectionModel().getSelectedItems()) {
-            item.getLevelProperty(level).set(enabled);
+            item.getFxProperties().getLevelProperty(level).set(enabled);
         }
     }
 
@@ -177,7 +177,7 @@ public class ControllerAggManager implements Initializable {
                 cell.setAlignment(Pos.CENTER);
                 return cell;
             });
-            column.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, Boolean> param) -> param.getValue().getLevelProperty(level));
+            column.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, Boolean> param) -> param.getValue().getFxProperties().getLevelProperty(level));
             column.setEditable(true);
             addMenuToColumn(column, level);
             columnsByLevel.put(level, column);
@@ -263,7 +263,7 @@ public class ControllerAggManager implements Initializable {
         }
         columnsByLevel.clear();
         baseColumn = new TableColumn("Base Name");
-        baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getBaseNameProperty());
+        baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getFxProperties().getBaseNameProperty());
         buttonColumn = new TableColumn<>("🔃");
         buttonColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, AggregationBase> param) -> new ReadOnlyObjectWrapper<>(param.getValue()));
         buttonColumn.setCellFactory((final TableColumn<AggregationBase, AggregationBase> param) -> new ButtonTableCell<AggregationBase, AggregationBase>("🔃") {

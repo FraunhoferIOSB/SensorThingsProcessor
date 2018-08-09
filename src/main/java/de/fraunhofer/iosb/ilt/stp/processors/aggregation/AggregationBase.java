@@ -23,11 +23,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-import javafx.beans.value.ObservableValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,53 +37,43 @@ public class AggregationBase {
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(AggregationBase.class);
 
-    private final StringProperty baseName;
+    private final String baseName;
     private Datastream baseDatastream;
     private MultiDatastream baseMultiDatastream;
 
     private final Set<AggregateCombo> combos = new TreeSet<>();
     private final Map<AggregationLevel, AggregateCombo> combosByLevel = new HashMap<>();
-    private final Map<AggregationLevel, BooleanProperty> levelToggles = new HashMap<>();
     private final Map<AggregationLevel, Boolean> wantedLevels = new HashMap<>();
 
+    private AggregationBaseFx fxProperties;
+
     public AggregationBase(String baseName) {
-        this.baseName = new SimpleStringProperty(baseName);
+        this.baseName = baseName;
     }
 
-    public AggregationBase(StringProperty baseName, Datastream baseDatastream, MultiDatastream baseMultiDatastream) {
+    public AggregationBase(String baseName, Datastream baseDatastream, MultiDatastream baseMultiDatastream) {
         this.baseName = baseName;
         this.baseDatastream = baseDatastream;
         this.baseMultiDatastream = baseMultiDatastream;
     }
 
     public String getBaseName() {
-        return baseName.get();
-    }
-
-    public StringProperty getBaseNameProperty() {
         return baseName;
     }
 
-    public BooleanProperty getLevelProperty(final AggregationLevel level) {
-        BooleanProperty property = levelToggles.get(level);
-        if (property == null) {
-            boolean hasProp = combosByLevel.containsKey(level);
-            property = new SimpleBooleanProperty(hasProp);
-            levelToggles.put(level, property);
-            property.addListener(
-                    (ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
-                        toggleLevel(level, newValue);
-                    });
+    public AggregationBaseFx getFxProperties() {
+        if (fxProperties == null) {
+            fxProperties = new AggregationBaseFx(this);
         }
-        return property;
+        return fxProperties;
     }
 
-    private void toggleLevel(final AggregationLevel level, boolean toValue) {
+    protected void toggleLevel(final AggregationLevel level, boolean toValue) {
         if (toValue) {
-            LOGGER.info("Adding level {} to base {}.", level, baseName.get());
+            LOGGER.info("Adding level {} to base {}.", level, baseName);
             wantedLevels.put(level, true);
         } else {
-            LOGGER.info("Removing level {} from base {}.", level, baseName.get());
+            LOGGER.info("Removing level {} from base {}.", level, baseName);
             wantedLevels.put(level, false);
         }
     }
@@ -110,15 +95,9 @@ public class AggregationBase {
         if (old != null) {
             LOGGER.warn("Multiple combos of level {} found for base {}.", level, getBaseName());
         }
-
-        BooleanProperty presentProp = levelToggles.get(level);
-        if (presentProp != null) {
-            presentProp.set(true);
+        if (fxProperties != null) {
+            fxProperties.comboAdded(level);
         }
-    }
-
-    public Map<AggregationLevel, BooleanProperty> getLevelToggles() {
-        return levelToggles;
     }
 
     public Map<AggregationLevel, Boolean> getWantedLevels() {
