@@ -11,7 +11,7 @@
     <logger name="de.fraunhofer.iosb.ilt.sta" level="INFO"/>
     <logger name="org.reflections.Reflections" level="INFO"/>
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>
