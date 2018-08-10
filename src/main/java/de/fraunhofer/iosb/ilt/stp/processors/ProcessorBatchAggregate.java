@@ -549,10 +549,11 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     @Override
     public void stopListening() {
+        LOGGER.debug("Stopping ProcessorBatchAggregate...");
         running = false;
         try {
             if (mqttClient.isConnected()) {
-                LOGGER.info("Stopping MQTT client.");
+                LOGGER.info("Stopping MQTT client...");
                 Map<String, List<AggregateCombo>> comboBySource = aggregationData.getComboBySource();
                 String[] paths = comboBySource.keySet().toArray(new String[comboBySource.size()]);
                 mqttClient.unsubscribe(paths);
@@ -561,13 +562,14 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 LOGGER.info("MQTT client already stopped.");
             }
             if (messageReceptionService != null) {
-                LOGGER.info("Stopping Receivers.");
+                LOGGER.info("Stopping Receivers...");
                 ProcessorHelper.shutdownProcessors(messageReceptionService, messagesToHandle, 5, TimeUnit.SECONDS);
             }
             stopProcessors(5);
         } catch (MqttException ex) {
             LOGGER.error("Problem while disconnecting!", ex);
         }
+        LOGGER.debug("Done stopping ProcessorBatchAggregate.");
     }
 
     private synchronized void startProcessors() {
@@ -585,7 +587,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             orderMerger.stop();
         }
         if (orderExecutorService != null) {
-            LOGGER.info("Stopping Processors.");
+            LOGGER.info("Stopping Processors...");
             ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, waitSeconds, TimeUnit.SECONDS);
         }
     }

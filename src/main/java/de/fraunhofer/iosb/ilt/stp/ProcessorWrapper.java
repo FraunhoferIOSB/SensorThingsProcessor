@@ -75,6 +75,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
     }
 
     public void stopProcess() {
+        LOGGER.debug("Telling processor to stop listening...");
         if (processor != null) {
             removeShutdownHook();
             processor.stopListening();
@@ -83,6 +84,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
 
     private synchronized void addShutdownHook() {
         if (this.shutdownHook == null) {
+            LOGGER.debug("Creating shutdown hook...");
             this.shutdownHook = new Thread(() -> {
                 LOGGER.info("Shutting down...");
                 try {
@@ -99,6 +101,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
 
     private synchronized void removeShutdownHook() {
         if (shutdownHook != null) {
+            LOGGER.debug("Removing shutdown hook...");
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
             shutdownHook = null;
         }

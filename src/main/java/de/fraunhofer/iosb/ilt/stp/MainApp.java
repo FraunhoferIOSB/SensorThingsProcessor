@@ -90,6 +90,7 @@ public class MainApp {
         } else {
             ProcessorWrapper.importCmdLine(arguments);
         }
+        LOGGER.debug("Main thread done.");
     }
 
     public static void showHelp() {
