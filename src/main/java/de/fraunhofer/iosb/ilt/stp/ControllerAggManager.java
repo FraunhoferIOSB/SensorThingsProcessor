@@ -44,19 +44,24 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.beans.value.ObservableValueBase;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
+import javafx.concurrent.WorkerStateEvent;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
@@ -106,6 +111,9 @@ public class ControllerAggManager implements Initializable {
 
     @FXML
     private TableView<AggregationBase> table;
+
+    @FXML
+    private ProgressBar progressBar;
 
     private SensorThingsService service;
 
@@ -261,7 +269,36 @@ public class ControllerAggManager implements Initializable {
         if (service == null) {
             return;
         }
-        columnsByLevel.clear();
+        table.setVisible(false);
+        progressBar.setVisible(true);
+
+        final AggregationData myData = new AggregationData(service, true, true);
+
+        Task<AggregationData> task = new Task<AggregationData>() {
+            @Override
+            protected AggregationData call() throws Exception {
+                AggregationData.ProgressListener pl = (double progress1) -> {
+                    updateProgress(progress1, 1);
+                };
+                myData.addProgressListener(pl);
+                myData.getAggregationBases();
+                myData.removeProgressListener(pl);
+                return myData;
+            }
+        };
+        task.setOnSucceeded((WorkerStateEvent event1) -> {
+            fillTableAndShow(task.getValue());
+        });
+        task.setOnFailed((WorkerStateEvent event1) -> {
+            new Alert(Alert.AlertType.ERROR, "Loading failed: " + event1.toString(), ButtonType.CLOSE).show();
+        });
+        progressBar.progressProperty().unbind();
+        progressBar.progressProperty().bind(task.progressProperty());
+        new Thread(task).start();
+    }
+
+    private void fillTableAndShow(AggregationData myData) {
+        data = myData;
         baseColumn = new TableColumn("Base Name");
         baseColumn.setCellValueFactory((TableColumn.CellDataFeatures<AggregationBase, String> param) -> param.getValue().getFxProperties().getBaseNameProperty());
         buttonColumn = new TableColumn<>("🔃");
@@ -272,7 +309,7 @@ public class ControllerAggManager implements Initializable {
                 reCalculateBase(row.getItem());
             }
         });
-        data = new AggregationData(service, true, true);
+        columnsByLevel.clear();
         for (AggregationBase base : data.getAggregationBases()) {
             for (AggregateCombo combo : base.getCombos()) {
                 getColumnForLevel(combo.level);
@@ -285,6 +322,8 @@ public class ControllerAggManager implements Initializable {
         table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         table.setItems(FXCollections.observableArrayList(data.getAggregationBases()));
 
+        progressBar.setVisible(false);
+        table.setVisible(true);
     }
 
     @FXML
@@ -301,13 +340,17 @@ public class ControllerAggManager implements Initializable {
 
     @FXML
     private void actionApplyChanges(ActionEvent event) throws ServiceFailureException {
-        String changeLog = generateChangeLog();
+        List<String> changeLog = generateChangeLog();
+        StringBuilder changeString = new StringBuilder();
+        for (String line : changeLog) {
+            changeString.append(line);
+        }
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setResizable(true);
         dialog.setTitle("Apply changes?");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
         dialog.getDialogPane().getButtonTypes().add(ButtonType.APPLY);
-        TextArea textArea = new TextArea(changeLog);
+        TextArea textArea = new TextArea(changeString.toString());
         textArea.setEditable(false);
         textArea.setWrapText(false);
         dialog.getDialogPane().setContent(textArea);
@@ -315,11 +358,32 @@ public class ControllerAggManager implements Initializable {
         Optional<ButtonType> confirmation = dialog.showAndWait();
         if (confirmation.isPresent() && confirmation.get() == ButtonType.APPLY) {
             LOGGER.info("Working");
-            applyChanges();
-            actionReload(null);
+            applyChangesTask(changeLog.size());
         } else {
             LOGGER.info("Cancelled");
         }
+    }
+
+    private void applyChangesTask(int count) {
+        final SimpleDoubleProperty progress = new SimpleDoubleProperty(0);
+        Task<Void> task = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                applyChanges(progress,count);
+                return null;
+            }
+        };
+        task.setOnSucceeded((WorkerStateEvent event1) -> {
+            actionReload(null);
+        });
+        task.setOnFailed((WorkerStateEvent event1) -> {
+            new Alert(Alert.AlertType.ERROR, "Update Failed: " + event1.toString(), ButtonType.CLOSE).show();
+        });
+        table.setVisible(false);
+        progressBar.progressProperty().unbind();
+        progressBar.progressProperty().bind(progress);
+        progressBar.setVisible(true);
+        new Thread(task).start();
     }
 
     private void createAggregate(AggregationBase base, AggregationLevel level) throws ServiceFailureException {
@@ -359,7 +423,8 @@ public class ControllerAggManager implements Initializable {
         }
     }
 
-    private void applyChanges() throws ServiceFailureException {
+    private void applyChanges(SimpleDoubleProperty progress,int changeCount) throws ServiceFailureException {
+        int nr = 0;
         for (AggregationBase base : data.getAggregationBases()) {
             Map<AggregationLevel, AggregateCombo> presentLevels = base.getCombosByLevel();
             Map<AggregationLevel, Boolean> wantedLevels = base.getWantedLevels();
@@ -367,18 +432,21 @@ public class ControllerAggManager implements Initializable {
                 AggregationLevel level = wantedEntry.getKey();
                 boolean wanted = wantedEntry.getValue();
                 if (wanted && !presentLevels.containsKey(level)) {
+                    nr++;
                     createAggregate(base, level);
 
                 } else if (!wanted && presentLevels.containsKey(level)) {
+                    nr++;
                     deleteAggregate(base, level);
                 }
-
             }
+
+            progress.set(1.0 * nr / changeCount);
         }
     }
 
-    private String generateChangeLog() {
-        StringBuilder changeLog = new StringBuilder();
+    private List<String> generateChangeLog() {
+        List<String> changeLog = new ArrayList<>();
         for (AggregationBase base : data.getAggregationBases()) {
             Map<AggregationLevel, AggregateCombo> presentLevels = base.getCombosByLevel();
             Map<AggregationLevel, Boolean> wantedLevels = base.getWantedLevels();
@@ -386,14 +454,14 @@ public class ControllerAggManager implements Initializable {
                 AggregationLevel level = wantedEntry.getKey();
                 boolean wanted = wantedEntry.getValue();
                 if (wanted && !presentLevels.containsKey(level)) {
-                    changeLog.append("Create ").append(level.toString()).append(" for ").append(base.getBaseName()).append('\n');
+                    changeLog.add("Create " + level.toString() + " for " + base.getBaseName() + '\n');
 
                 } else if (!wanted && presentLevels.containsKey(level)) {
-                    changeLog.append("DELETE ").append(level.toString()).append(" for ").append(base.getBaseName()).append('\n');
+                    changeLog.add("DELETE " + level.toString() + " for " + base.getBaseName() + '\n');
 
                 }
             }
         }
-        return changeLog.toString();
+        return changeLog;
     }
 }

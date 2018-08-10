@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,10 @@ public class AggregationData {
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(AggregationData.class);
 
+    public static interface ProgressListener {
+
+        public void setProgress(double progress);
+    }
     private final SensorThingsService service;
     private List<AggregationBase> aggregationBases = new ArrayList<>();
     private Map<String, AggregationBase> aggregationBasesByName = new HashMap<>();
@@ -56,6 +61,9 @@ public class AggregationData {
     private final boolean fixReferences;
     private final boolean addEmptyBases;
     private final boolean sourceEqualsTarget = true;
+    private double progressBase = 0;
+    private double progressTarget = 1;
+    private final List<ProgressListener> progressListeners = new CopyOnWriteArrayList<>();
 
     public AggregationData(SensorThingsService service, boolean fixReferences, boolean addEmptyBases) {
         this.service = service;
@@ -79,17 +87,23 @@ public class AggregationData {
 
     private void findAllBases() {
         try {
-            Iterator<Datastream> datastreams = service.datastreams()
+            EntityList<Datastream> dsList = service.datastreams()
                     .query()
                     .select("id", "name", "description", "properties", "unitOfMeasurement")
-                    .list()
-                    .fullIterator();
+                    .count()
+                    .list();
+            long count = dsList.getCount();
+            double pPart = (progressTarget - progressBase) / count;
+            int nr = 0;
+            Iterator<Datastream> datastreams = dsList.fullIterator();
             while (datastreams.hasNext()) {
                 Datastream datastream = datastreams.next();
                 String name = datastream.getName();
                 String base = baseNameFromName(name);
                 AggregationBase aggregationBase = getAggregationBase(base);
                 aggregationBase.setBaseDatastream(datastream);
+                nr++;
+                setProgress(progressBase + nr * pPart);
             }
         } catch (ServiceFailureException exc) {
             LOGGER.error("Service error loading Datastreams: ", exc);
@@ -98,9 +112,13 @@ public class AggregationData {
 
     private void findTargetMultiDatastreams() {
         try {
-            Iterator<Thing> things = service.things().query().list().fullIterator();
-            while (things.hasNext()) {
-                Thing thing = things.next();
+            EntityList<Thing> thingList = service.things().query().count().list();
+            long count = thingList.getCount();
+            double pPart = (progressTarget - progressBase) / count;
+            int nr = 0;
+            Iterator<Thing> thingIt = thingList.fullIterator();
+            while (thingIt.hasNext()) {
+                Thing thing = thingIt.next();
                 EntityList<MultiDatastream> dsList = thing.multiDatastreams().query().filter("endsWith(name, ']')").list();
                 for (Iterator<MultiDatastream> it = dsList.fullIterator(); it.hasNext();) {
                     MultiDatastream mds = it.next();
@@ -123,6 +141,8 @@ public class AggregationData {
                     AggregationBase aggBase = getAggregationBase(combo.baseName);
                     aggBase.addCombo(combo);
                 }
+                nr++;
+                setProgress(progressBase + nr * pPart);
             }
         } catch (ServiceFailureException exc) {
             LOGGER.error("Service error: ", exc);
@@ -218,9 +238,13 @@ public class AggregationData {
     }
 
     private void findSourceDatastreams(List<AggregationBase> bases) {
+        long count = bases.size();
+        double pPart = (progressTarget - progressBase) / count;
+        int nr = 0;
         for (AggregationBase base : bases) {
             findSourceDatastreams(base);
-
+            nr++;
+            setProgress(progressBase + nr * pPart);
         }
     }
 
@@ -233,17 +257,26 @@ public class AggregationData {
     }
 
     private void gatherData() {
+        setProgress(0, 0.1);
         if (addEmptyBases) {
             findAllBases();
             LOGGER.info("Found {} base names", aggregationBases.size());
         }
+        moveProgress(0.3);
+
         // Find target multidatastreams
         findTargetMultiDatastreams();
         LOGGER.info("Found {} comboSets", aggregationBasesByName.size());
+        moveProgress(0.9);
+
         // Find source datastreams matching the targets
         findSourceDatastreams(aggregationBases);
+        moveProgress(1);
 
         combosBySource = new HashMap<>();
+        long count = aggregationBasesByName.size();
+        double pPart = (progressTarget - progressBase) / count;
+        int nr = 0;
         for (AggregationBase base : aggregationBasesByName.values()) {
             for (AggregateCombo combo : base.getCombos()) {
                 String path = combo.getSourceObsMqttPath();
@@ -257,7 +290,10 @@ public class AggregationData {
                 }
                 bySource.add(combo);
             }
+            nr++;
+            setProgress(progressBase + nr * pPart);
         }
+        setProgress(1);
         LOGGER.info("Found {} unique source datastreams", combosBySource.size());
     }
 
@@ -350,6 +386,32 @@ public class AggregationData {
 
     public void setZoneId(ZoneId zoneId) {
         this.zoneId = zoneId;
+    }
+
+    public void moveProgress(double target) {
+        progressBase = progressTarget;
+        progressTarget = target;
+        setProgress(progressBase);
+    }
+
+    public void setProgress(double base, double target) {
+        progressBase = base;
+        progressTarget = target;
+        setProgress(base);
+    }
+
+    public void setProgress(double p) {
+        for (ProgressListener l : progressListeners) {
+            l.setProgress(p);
+        }
+    }
+
+    public void addProgressListener(ProgressListener l) {
+        progressListeners.add(l);
+    }
+
+    public void removeProgressListener(ProgressListener l) {
+        progressListeners.remove(l);
     }
 
 }

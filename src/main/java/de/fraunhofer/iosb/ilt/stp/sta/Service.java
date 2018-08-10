@@ -121,7 +121,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
     public ConfigEditor<?> getConfigEditor(SensorThingsService context, Object edtCtx) {
         if (editor == null) {
             editor = new EditorMap<>();
-            editorService = new EditorString("https://service.somewhere/path/v1.0", 1, "Service URL", "The url of the server.");
+            editorService = new EditorString("http://localhost:8080/FROST-Server/v1.0", 1, "Service URL", "The url of the server.");
             editor.addOption("serviceUrl", editorService, false);
 
             editorMqttUrl = new EditorString("tcp://localhost:1883", 1, "MQTT Url", "Connection url for the mqtt service");
