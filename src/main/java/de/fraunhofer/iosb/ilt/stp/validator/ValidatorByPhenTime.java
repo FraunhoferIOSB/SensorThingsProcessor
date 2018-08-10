@@ -28,6 +28,8 @@ import de.fraunhofer.iosb.ilt.sta.model.Observation;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.ProcessException;
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +65,25 @@ public class ValidatorByPhenTime implements Validator {
             }
             if (two instanceof BigDecimal) {
                 return ((BigDecimal) two).equals(new BigDecimal(one.toString()));
+            }
+            if (one instanceof Collection && two instanceof Collection) {
+                Collection cOne = (Collection) one;
+                Collection cTwo = (Collection) two;
+                Iterator iTwo = cTwo.iterator();
+                for (Object itemOne : cOne) {
+                    if (!iTwo.hasNext()) {
+                        // Collection one is longer than two
+                        return false;
+                    }
+                    if (!resultCompare(itemOne, iTwo.next())) {
+                        return false;
+                    }
+                }
+                if (iTwo.hasNext()) {
+                    // Collection two is longer than one.
+                    return false;
+                }
+                return true;
             }
         } catch (NumberFormatException e) {
             LOGGER.trace("Not both bigdecimal.", e);

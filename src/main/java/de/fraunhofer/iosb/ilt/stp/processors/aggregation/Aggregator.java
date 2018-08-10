@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.slf4j.Logger;
@@ -88,8 +89,8 @@ public class Aggregator {
         return phenTime.getAsDateTime().toInstant();
     }
 
-    public BigDecimal[] calculateAggregateResultFromOriginalLists(Interval interval, List<Observation> sourceObs) {
-        BigDecimal[] result;
+    public List<BigDecimal> calculateAggregateResultFromOriginalLists(Interval interval, List<Observation> sourceObs) {
+        List<BigDecimal> result;
         int scale = 0;
         DescriptiveStatistics stats = new DescriptiveStatistics();
         BigDecimal min = new BigDecimal(Double.MAX_VALUE);
@@ -137,17 +138,16 @@ public class Aggregator {
         BigDecimal avg = new BigDecimal(stats.getMean());
         BigDecimal dev = new BigDecimal(stats.getStandardDeviation());
 
-        result = new BigDecimal[]{
-            avg.setScale(Math.min(scale, avg.scale()), RoundingMode.HALF_UP),
-            min,
-            max,
-            dev.setScale(Math.min(scale, dev.scale()), RoundingMode.HALF_UP)
-        };
+        result = new ArrayList<>(4);
+        result.add(avg.setScale(Math.min(scale, avg.scale()), RoundingMode.HALF_UP));
+        result.add(min);
+        result.add(max);
+        result.add(dev.setScale(Math.min(scale, dev.scale()), RoundingMode.HALF_UP));
         return result;
     }
 
-    public BigDecimal[] calculateAggregateResultFromOriginals(Interval interval, List<Observation> sourceObs) {
-        BigDecimal[] result;
+    public List<BigDecimal> calculateAggregateResultFromOriginals(Interval interval, List<Observation> sourceObs) {
+        List<BigDecimal> result;
         int scale = 0;
         DescriptiveStatistics stats = new DescriptiveStatistics();
         Number prevResult = null;
@@ -185,17 +185,16 @@ public class Aggregator {
         avg += curResult * deltaMillis / totalMillis;
 
         BigDecimal average = BigDecimal.valueOf(avg).setScale(scale, RoundingMode.HALF_UP);
-        result = new BigDecimal[]{
-            average,
-            new BigDecimal(stats.getMin()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getMax()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP)
-        };
+        result = new ArrayList<>(4);
+        result.add(average);
+        result.add(new BigDecimal(stats.getMin()).setScale(scale, RoundingMode.HALF_UP));
+        result.add(new BigDecimal(stats.getMax()).setScale(scale, RoundingMode.HALF_UP));
+        result.add(new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP));
         return result;
     }
 
-    public BigDecimal[] calculateAggregateResultFromAggregates(List<Observation> sourceObs) {
-        BigDecimal[] result;
+    public List<BigDecimal> calculateAggregateResultFromAggregates(List<Observation> sourceObs) {
+        List<BigDecimal> result;
         DescriptiveStatistics stats = new DescriptiveStatistics();
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
@@ -216,12 +215,12 @@ public class Aggregator {
                 throw new IllegalArgumentException("Expected List, got " + type);
             }
         }
-        result = new BigDecimal[]{
-            new BigDecimal(stats.getMean()).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(min).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(max).setScale(scale, RoundingMode.HALF_UP),
-            new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP)
-        };
+        result = new ArrayList<>(4);
+        result.add(new BigDecimal(stats.getMean()).setScale(scale, RoundingMode.HALF_UP));
+        result.add(new BigDecimal(min).setScale(scale, RoundingMode.HALF_UP));
+        result.add(new BigDecimal(max).setScale(scale, RoundingMode.HALF_UP));
+        result.add(new BigDecimal(stats.getStandardDeviation()).setScale(scale, RoundingMode.HALF_UP));
+
         return result;
     }
 }
