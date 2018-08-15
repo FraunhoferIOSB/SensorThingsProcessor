@@ -22,6 +22,7 @@ import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
 import de.fraunhofer.iosb.ilt.sta.model.ext.EntityList;
+import de.fraunhofer.iosb.ilt.sta.query.Query;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.aggregation.Utils;
 import de.fraunhofer.iosb.ilt.stp.utils.SensorThingsUtils;
@@ -54,8 +55,8 @@ public class AggregationData {
         public void setProgress(double progress);
     }
     private final SensorThingsService service;
-    private List<AggregationBase> aggregationBases = new ArrayList<>();
-    private Map<String, AggregationBase> aggregationBasesByName = new HashMap<>();
+    private final List<AggregationBase> aggregationBases = new ArrayList<>();
+    private final Map<String, AggregationBase> aggregationBasesByName = new HashMap<>();
     private Map<String, List<AggregateCombo>> combosBySource;
     private ZoneId zoneId;
     private final boolean fixReferences;
@@ -87,11 +88,13 @@ public class AggregationData {
 
     private void findAllBases() {
         try {
-            EntityList<Datastream> dsList = service.datastreams()
+            Query<Datastream> query = service.datastreams()
                     .query()
-                    .select("id", "name", "description", "properties", "unitOfMeasurement")
-                    .count()
-                    .list();
+                    .select("id", "name", "description", "properties", "unitOfMeasurement");
+            if (hasListeners()) {
+                query.count();
+            }
+            EntityList<Datastream> dsList = query.list();
             long count = dsList.getCount();
             double pPart = (progressTarget - progressBase) / count;
             int nr = 0;
@@ -112,7 +115,11 @@ public class AggregationData {
 
     private void findTargetMultiDatastreams() {
         try {
-            EntityList<Thing> thingList = service.things().query().count().list();
+            Query<Thing> query = service.things().query();
+            if (hasListeners()) {
+                query.count();
+            }
+            EntityList<Thing> thingList = query.list();
             long count = thingList.getCount();
             double pPart = (progressTarget - progressBase) / count;
             int nr = 0;
@@ -404,6 +411,10 @@ public class AggregationData {
         for (ProgressListener l : progressListeners) {
             l.setProgress(p);
         }
+    }
+
+    public boolean hasListeners() {
+        return !progressListeners.isEmpty();
     }
 
     public void addProgressListener(ProgressListener l) {
