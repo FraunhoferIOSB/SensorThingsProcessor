@@ -48,8 +48,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -91,6 +94,8 @@ public class Service implements Configurable<SensorThingsService, Object> {
     private String clientId;
     private MqttClient client;
     private Validator validator;
+
+    private final Map<String, List<IMqttMessageListener>> mqttSubscriptions = new HashMap<>();
 
     @Override
     public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
@@ -156,7 +161,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
         return clientId;
     }
 
-    public MqttClient getMqttClient() throws MqttException {
+    public synchronized MqttClient getMqttClient() throws MqttException {
         if (client == null) {
             String myClientId = getClientId();
             LOGGER.info("Connecting to {} using clientId {}.", editorMqttUrl.getValue(), myClientId);
@@ -166,7 +171,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
             connOpts.setCleanSession(false);
             connOpts.setKeepAliveInterval(60);
             connOpts.setConnectionTimeout(30);
-            client.setCallback(new MqttCallback() {
+            client.setCallback(new MqttCallbackExtended() {
                 @Override
                 public void connectionLost(Throwable cause) {
                     LOGGER.info("connectionLost");
@@ -179,10 +184,79 @@ public class Service implements Configurable<SensorThingsService, Object> {
                 @Override
                 public void deliveryComplete(IMqttDeliveryToken token) {
                 }
+
+                @Override
+                public void connectComplete(boolean reconnect, String serverURI) {
+                    resubscribeAll();
+                }
             });
             client.connect(connOpts);
         }
         return client;
+    }
+
+    public synchronized void closeMqttClient() throws MqttException {
+        LOGGER.info("Unsubscribing all topics...");
+        unsubscribeAll();
+        if (client == null) {
+            return;
+        }
+        if (client.isConnected()) {
+            LOGGER.info("Stopping MQTT client...");
+            client.disconnect();
+        } else {
+            LOGGER.info("MQTT client already stopped.");
+        }
+        client = null;
+    }
+
+    private void resubscribeAll() {
+        for (Map.Entry<String, List<IMqttMessageListener>> entry : mqttSubscriptions.entrySet()) {
+            String topic = entry.getKey();
+            List<IMqttMessageListener> listeners = entry.getValue();
+            for (IMqttMessageListener listener : listeners) {
+                try {
+                    client.subscribe(topic, listener);
+                } catch (MqttException exc) {
+                    LOGGER.error("Failed to re-subscript to topic.", exc);
+                }
+            }
+        }
+    }
+
+    public synchronized void unsubscribeAll() {
+        for (String topic : mqttSubscriptions.keySet()) {
+            try {
+                removeSubscriptions(topic);
+            } catch (MqttException exc) {
+                LOGGER.error("Failed to un-subscript to topic.", exc);
+            }
+        }
+    }
+
+    private List<IMqttMessageListener> getSubscriptionListForTopic(String topic) {
+        List<IMqttMessageListener> listeners = mqttSubscriptions.get(topic);
+        if (listeners == null) {
+            listeners = new ArrayList<>();
+            mqttSubscriptions.put(topic, listeners);
+        }
+        return listeners;
+    }
+
+    public synchronized void removeSubscriptions(String topic) throws MqttException {
+        mqttSubscriptions.remove(topic);
+        if (client == null) {
+            return;
+        }
+        client.unsubscribe(topic);
+    }
+
+    public synchronized void subscribe(String topic, IMqttMessageListener messageListener) throws MqttException {
+        getSubscriptionListForTopic(topic).add(messageListener);
+        if (client == null) {
+            return;
+        }
+        client.subscribe(topic, messageListener);
     }
 
     public void setNoAct(boolean noAct) {

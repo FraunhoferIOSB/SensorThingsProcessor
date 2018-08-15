@@ -213,7 +213,6 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private boolean noAct = false;
     private Duration orderDelay;
     private ZoneId zoneId;
-    private MqttClient mqttClient;
     private SensorThingsService stsSource;
     private AggregationData aggregationData;
 
@@ -302,7 +301,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
         int wantedSize = combo.target.getMultiObservationDataTypes().size();
         while (result.size() > wantedSize) {
-            result.remove(result.size()-1);
+            result.remove(result.size() - 1);
         }
         while (result.size() < wantedSize) {
             result.add(null);
@@ -429,7 +428,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             calculateAggregates(orderQueue, combos);
 
             // Then add the subscription.
-            mqttClient.subscribe(path, (String topic, MqttMessage message) -> {
+            sourceService.subscribe(path, (String topic, MqttMessage message) -> {
                 if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
                     int count = messagesCount.getAndIncrement();
                     if (count > 1) {
@@ -532,7 +531,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         orderQueue = new DelayQueue<>();
         running = true;
         try {
-            mqttClient = sourceService.getMqttClient();
+            sourceService.getMqttClient();
             startProcessors();
             if (messageReceptionService == null) {
                 messageReceptionService = ProcessorHelper.createProcessors(
@@ -554,15 +553,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         LOGGER.debug("Stopping ProcessorBatchAggregate...");
         running = false;
         try {
-            if (mqttClient.isConnected()) {
-                LOGGER.info("Stopping MQTT client...");
-                Map<String, List<AggregateCombo>> comboBySource = aggregationData.getComboBySource();
-                String[] paths = comboBySource.keySet().toArray(new String[comboBySource.size()]);
-                mqttClient.unsubscribe(paths);
-                mqttClient.disconnect();
-            } else {
-                LOGGER.info("MQTT client already stopped.");
-            }
+            sourceService.closeMqttClient();
             if (messageReceptionService != null) {
                 LOGGER.info("Stopping Receivers...");
                 ProcessorHelper.shutdownProcessors(messageReceptionService, messagesToHandle, 5, TimeUnit.SECONDS);
