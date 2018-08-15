@@ -48,10 +48,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Level;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -225,7 +223,8 @@ public class Service implements Configurable<SensorThingsService, Object> {
     }
 
     public synchronized void unsubscribeAll() {
-        for (String topic : mqttSubscriptions.keySet()) {
+        String[] topics = mqttSubscriptions.keySet().toArray(new String[0]);
+        for (String topic : topics) {
             try {
                 removeSubscriptions(topic);
             } catch (MqttException exc) {
@@ -245,7 +244,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
 
     public synchronized void removeSubscriptions(String topic) throws MqttException {
         mqttSubscriptions.remove(topic);
-        if (client == null) {
+        if (client == null || !client.isConnected()) {
             return;
         }
         client.unsubscribe(topic);
@@ -253,7 +252,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
 
     public synchronized void subscribe(String topic, IMqttMessageListener messageListener) throws MqttException {
         getSubscriptionListForTopic(topic).add(messageListener);
-        if (client == null) {
+        if (client == null || !client.isConnected()) {
             return;
         }
         client.subscribe(topic, messageListener);
