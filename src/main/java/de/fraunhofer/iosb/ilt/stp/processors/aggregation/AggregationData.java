@@ -73,7 +73,7 @@ public class AggregationData {
     }
 
     public AggregationData(SensorThingsService service, boolean fixReferences) {
-        this(service, fixReferences, false);
+        this(service, fixReferences, true);
     }
 
     private AggregationBase getAggregationBase(String baseName) {
