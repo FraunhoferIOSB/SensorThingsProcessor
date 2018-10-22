@@ -77,12 +77,14 @@ public class AggregationData {
     }
 
     private AggregationBase getAggregationBase(String baseName) {
-        AggregationBase aggBase = aggregationBasesByName.get(baseName);
-        if (aggBase == null) {
-            aggBase = new AggregationBase(baseName);
-            aggregationBases.add(aggBase);
-            aggregationBasesByName.put(baseName, aggBase);
-        }
+        AggregationBase aggBase = aggregationBasesByName.computeIfAbsent(
+                baseName,
+                name -> {
+                    AggregationBase base = new AggregationBase(name);
+                    aggregationBases.add(base);
+                    return base;
+                }
+        );
         return aggBase;
     }
 
@@ -90,7 +92,9 @@ public class AggregationData {
         try {
             Query<Datastream> query = service.datastreams()
                     .query()
-                    .select("id", "name", "description", "properties", "unitOfMeasurement");
+                    .select("id", "name", "description", "properties", "unitOfMeasurement")
+                    .top(1000)
+                    .orderBy("id asc");
             if (hasListeners()) {
                 query.count();
             }
@@ -115,7 +119,10 @@ public class AggregationData {
 
     private void findTargetMultiDatastreams() {
         try {
-            Query<Thing> query = service.things().query();
+            Query<Thing> query = service.things()
+                    .query()
+                    .top(1000)
+                    .orderBy("id asc");
             if (hasListeners()) {
                 query.count();
             }
@@ -126,7 +133,12 @@ public class AggregationData {
             Iterator<Thing> thingIt = thingList.fullIterator();
             while (thingIt.hasNext()) {
                 Thing thing = thingIt.next();
-                EntityList<MultiDatastream> dsList = thing.multiDatastreams().query().filter("endsWith(name, ']')").list();
+                EntityList<MultiDatastream> dsList = thing.multiDatastreams()
+                        .query()
+                        .filter("endsWith(name, ']')")
+                        .orderBy("id asc")
+                        .top(1000)
+                        .list();
                 for (Iterator<MultiDatastream> it = dsList.fullIterator(); it.hasNext();) {
                     MultiDatastream mds = it.next();
                     String name = mds.getName();
@@ -158,22 +170,23 @@ public class AggregationData {
 
     private void findSourceDatastreams(AggregateCombo target) {
         try {
+            AggregationBase base = aggregationBasesByName.get(target.baseName);
+            if (base != null && base.getBaseDatastream() != null) {
+                target.sourceDs = base.getBaseDatastream();
+                target.sourceIsAggregate = false;
+                checkReference(target.sourceDs, target.target, target.level);
+                return;
+            }
 
             String nameQuoted = "'" + target.baseName.replaceAll("'", "''") + "'";
             {
-                List<Datastream> list = service.datastreams().query().filter("name eq " + nameQuoted).list().toList();
-                if (list.size() > 1) {
-                    LOGGER.warn("Multiple ({}) sources found for {}.", list.size(), target.baseName);
-                }
-                if (list.size() > 0) {
-                    target.sourceDs = list.get(0);
-                    target.sourceIsAggregate = false;
-                    checkReference(target.sourceDs, target.target, target.level);
-                    return;
-                }
-            }
-            {
-                List<MultiDatastream> list = service.multiDatastreams().query().filter("name eq " + nameQuoted).list().toList();
+                List<MultiDatastream> list = service.multiDatastreams()
+                        .query()
+                        .filter("name eq " + nameQuoted)
+                        .top(1000)
+                        .orderBy("id asc")
+                        .list()
+                        .toList();
                 if (list.size() > 1) {
                     LOGGER.warn("Multiple ({}) sources found for {}.", list.size(), target.baseName);
                 }
@@ -185,7 +198,13 @@ public class AggregationData {
                 }
             }
             {
-                List<Datastream> list = service.datastreams().query().filter("startswith(name," + nameQuoted + ")").list().toList();
+                List<Datastream> list = service.datastreams()
+                        .query()
+                        .filter("startswith(name," + nameQuoted + ")")
+                        .top(1000)
+                        .orderBy("id asc")
+                        .list()
+                        .toList();
                 if (list.size() > 1) {
                     LOGGER.warn("Multiple ({}) sources found for {}.", list.size(), target.baseName);
                 }
