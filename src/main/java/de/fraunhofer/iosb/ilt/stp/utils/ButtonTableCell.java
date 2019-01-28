@@ -43,7 +43,7 @@ public abstract class ButtonTableCell<S, T> extends TableCell<S, T> {
         });
     }
 
-    public abstract void onAction(TableRow<T> row);
+    public abstract void onAction(TableRow<S> row);
 
     @Override
     protected void updateItem(T item, boolean empty) {

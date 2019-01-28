@@ -168,9 +168,7 @@ public class AggregationLevel extends AbstractConfigurable<Void, Void> implement
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 53 * hash + Objects.hashCode(this.duration);
-        return hash;
+        return Objects.hash(duration);
     }
 
     @Override

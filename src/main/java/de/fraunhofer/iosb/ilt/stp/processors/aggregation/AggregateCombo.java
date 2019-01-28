@@ -275,11 +275,7 @@ public class AggregateCombo implements Comparable<AggregateCombo> {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 73 * hash + Objects.hashCode(this.target);
-        hash = 73 * hash + Objects.hashCode(this.level);
-        hash = 73 * hash + Objects.hashCode(this.baseName);
-        return hash;
+        return Objects.hash(target,level,baseName);
     }
 
     @Override

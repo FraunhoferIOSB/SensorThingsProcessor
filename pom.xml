@@ -4,7 +4,7 @@
 
     <groupId>de.fraunhofer.iosb.ilt</groupId>
     <artifactId>SensorThingsProcessor</artifactId>
-    <version>0.7</version>
+    <version>0.8</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -14,10 +14,11 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
-        <Configurable.version>0.10</Configurable.version>
-        <FROST-Client.version>0.15</FROST-Client.version>
+        <Configurable.version>0.12</Configurable.version>
         <dockerfile-maven-plugin.version>1.3.7</dockerfile-maven-plugin.version>
+        <FROST-Client.version>0.22</FROST-Client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
+        <openjfx.version>11.0.2</openjfx.version>
     </properties>
 
     <organization>
@@ -152,6 +153,16 @@
             <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
             <version>1.7.22</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${openjfx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${openjfx.version}</version>
         </dependency>
     </dependencies>
 </project>

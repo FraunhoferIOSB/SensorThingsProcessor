@@ -69,7 +69,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
@@ -150,11 +149,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
         @Override
         public int hashCode() {
-            int hash = 7;
-            hash = 23 * hash + (this.waiting.get() ? 1 : 0);
-            hash = 23 * hash + Objects.hashCode(this.combo);
-            hash = 23 * hash + Objects.hashCode(this.interval);
-            return hash;
+            return Objects.hash(waiting,combo,interval);
         }
 
         @Override

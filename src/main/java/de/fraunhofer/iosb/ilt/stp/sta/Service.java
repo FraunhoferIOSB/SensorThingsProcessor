@@ -37,6 +37,7 @@ import de.fraunhofer.iosb.ilt.sta.model.ext.EntityList;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.ProcessException;
 import de.fraunhofer.iosb.ilt.stp.validator.Validator;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -109,7 +110,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
             if (authMethod != null) {
                 authMethod.setAuth(service);
             }
-        } catch (URISyntaxException ex) {
+        } catch (MalformedURLException | URISyntaxException ex) {
             LOGGER.error("Failed to create service.", ex);
             throw new IllegalArgumentException("Failed to create service.", ex);
         }

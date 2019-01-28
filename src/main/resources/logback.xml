@@ -9,6 +9,7 @@
     </appender>
 
     <logger name="de.fraunhofer.iosb.ilt.sta" level="INFO"/>
+    <logger name="de.fraunhofer.iosb.ilt.sta.query" level="INFO"/>
     <logger name="org.reflections.Reflections" level="INFO"/>
 
     <root level="INFO">
