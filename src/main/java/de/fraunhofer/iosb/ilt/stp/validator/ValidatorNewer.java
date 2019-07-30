@@ -112,7 +112,7 @@ public class ValidatorNewer implements Validator {
     }
 
     @Override
-    public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
+    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) {
     }
 
     @Override

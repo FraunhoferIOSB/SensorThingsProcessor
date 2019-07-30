@@ -18,6 +18,7 @@
 package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
+import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorNull;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 
@@ -28,7 +29,7 @@ import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 public class AuthNone implements AuthMethod {
 
     @Override
-    public void configure(JsonElement config, Object context, Object edtCtx) {
+    public void configure(JsonElement config, Object context, Object edtCtx, ConfigEditor<?> ce) {
         // Nothing to configure
     }
 

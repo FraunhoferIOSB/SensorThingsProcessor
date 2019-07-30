@@ -18,6 +18,7 @@ package de.fraunhofer.iosb.ilt.stp.validator;
 
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.EditorFactory;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorList;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
@@ -40,7 +41,7 @@ public class ValidatorMulti implements Validator {
     public List<Validator> validators;
 
     @Override
-    public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
+    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
         getConfigEditor(context, edtCtx).setConfig(config);
         validators = editorValidators.getValue();
     }

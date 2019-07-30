@@ -20,7 +20,9 @@ package de.fraunhofer.iosb.ilt.stp;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.Configurable;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorSubclass;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
@@ -58,7 +60,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
     private Thread shutdownHook;
 
     @Override
-    public void configure(JsonElement config, Void context, Void edtCtx) {
+    public void configure(JsonElement config, Void context, Void edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
         getConfigEditor(context, edtCtx).setConfig(config);
         processor = editorProcessor.getValue();
     }
@@ -144,13 +146,13 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
         this.online = online;
         try {
             JsonElement json = new JsonParser().parse(config);
-            configure(json, null, null);
+            configure(json, null, null, null);
             processor.setNoAct(noAct);
             doProcess();
         } catch (JsonSyntaxException exc) {
             LOGGER.error("Failed to parse {}", config);
             LOGGER.debug("Failed to parse.", exc);
-        } catch (ProcessException | ServiceFailureException exc) {
+        } catch (ConfigurationException | ProcessException | ServiceFailureException exc) {
             LOGGER.error("Failed to import.", exc);
         }
     }

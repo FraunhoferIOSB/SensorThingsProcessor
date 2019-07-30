@@ -369,6 +369,7 @@ public class AggregationData {
     }
 
     private boolean checkProperty(Map<String, Object> properties, String property, Object value) {
+        boolean changed = false;
         Object oldValue = properties.get(property);
         if (!(value instanceof Number) && !(value instanceof Boolean) && !(value instanceof String)) {
             value = value.toString();
@@ -376,9 +377,9 @@ public class AggregationData {
         if (!value.equals(oldValue)) {
             LOGGER.info("Fixing property {} not correct. Is {}, should be {}.", property, oldValue, value);
             properties.put(property, value);
-            return true;
+            changed = true;
         }
-        return false;
+        return changed;
     }
 
     private void checkReference(MultiDatastream aggregate, String expectedAggFor, AggregationLevel level) {

@@ -18,10 +18,10 @@
 package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
+import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
-import java.net.MalformedURLException;
 import java.net.URL;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -46,7 +46,7 @@ public class AuthBasic implements AuthMethod {
     private EditorString editorPassword;
 
     @Override
-    public void configure(JsonElement config, Object context, Object edtCtx) {
+    public void configure(JsonElement config, Object context, Object edtCtx, ConfigEditor<?> ce) {
         getConfigEditor(context, edtCtx).setConfig(config);
     }
 

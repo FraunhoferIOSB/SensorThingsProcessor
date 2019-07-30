@@ -44,7 +44,7 @@ public interface Validator extends Configurable<SensorThingsService, Object> {
         }
 
         @Override
-        public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
+        public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) {
         }
 
         @Override

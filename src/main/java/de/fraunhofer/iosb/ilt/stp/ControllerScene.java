@@ -21,6 +21,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import java.io.File;
 import java.io.IOException;
@@ -79,8 +80,8 @@ public class ControllerScene implements Initializable {
         try {
             String config = FileUtils.readFileToString(file, "UTF-8");
             JsonElement json = new JsonParser().parse(config);
-            wrapper.configure(json, null, null);
-        } catch (IOException ex) {
+            wrapper.configure(json, null, null, null);
+        } catch (ConfigurationException | IOException ex) {
             LOGGER.error("Failed to read file", ex);
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("failed to read file");

@@ -57,7 +57,7 @@ public class ValidatorBefore implements Validator {
     }
 
     @Override
-    public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
+    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) {
         getConfigEditor(context, edtCtx).setConfig(config);
         Instant now = Instant.now();
         refTime = now.minus(Days.of(editorDays.getValue()));

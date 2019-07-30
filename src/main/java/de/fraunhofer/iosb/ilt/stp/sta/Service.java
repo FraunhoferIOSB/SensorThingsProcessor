@@ -21,6 +21,7 @@ import com.google.common.base.Strings;
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.Configurable;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
@@ -97,7 +98,7 @@ public class Service implements Configurable<SensorThingsService, Object> {
     private final Map<String, List<IMqttMessageListener>> mqttSubscriptions = new HashMap<>();
 
     @Override
-    public void configure(JsonElement config, SensorThingsService context, Object edtCtx) {
+    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
         service = context;
         if (service == null) {
             service = new SensorThingsService();

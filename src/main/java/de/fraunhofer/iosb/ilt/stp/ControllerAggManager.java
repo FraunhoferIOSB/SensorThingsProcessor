@@ -18,6 +18,7 @@
 package de.fraunhofer.iosb.ilt.stp;
 
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.logging.Level;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.value.ObservableValue;
@@ -245,7 +247,7 @@ public class ControllerAggManager implements Initializable {
     }
 
     @FXML
-    private void actionService(ActionEvent event) {
+    private void actionService(ActionEvent event) throws ConfigurationException {
         Node node = serivceEditor.getGuiFactoryFx().getNode();
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setResizable(true);
@@ -258,7 +260,7 @@ public class ControllerAggManager implements Initializable {
         if (confirmation.isPresent() && confirmation.get() == ButtonType.APPLY) {
             Service tempService = new Service();
             service = new SensorThingsService();
-            tempService.configure(serivceEditor.getConfig(), service, null);
+            tempService.configure(serivceEditor.getConfig(), service, null, null);
             textUrl.setText(service.getEndpoint().toString());
             buttonReload.setDisable(false);
         }
@@ -329,7 +331,11 @@ public class ControllerAggManager implements Initializable {
     @FXML
     private void actionAddLevel(ActionEvent event) {
         AggregationLevel level = new AggregationLevel();
-        level.configure(levelEditor.getConfig(), null, null);
+        try {
+            level.configure(levelEditor.getConfig(), null, null, null);
+        } catch (ConfigurationException ex) {
+            LOGGER.error("Failed to configure aggregation level.");
+        }
         TableColumn<AggregationBase, Boolean> column = getColumnForLevel(level);
         if (table.getColumns().contains(column)) {
             LOGGER.info("Column {} already exists.", level);
@@ -369,7 +375,7 @@ public class ControllerAggManager implements Initializable {
         Task<Void> task = new Task<Void>() {
             @Override
             protected Void call() throws Exception {
-                applyChanges(progress,count);
+                applyChanges(progress, count);
                 return null;
             }
         };
@@ -423,7 +429,7 @@ public class ControllerAggManager implements Initializable {
         }
     }
 
-    private void applyChanges(SimpleDoubleProperty progress,int changeCount) throws ServiceFailureException {
+    private void applyChanges(SimpleDoubleProperty progress, int changeCount) throws ServiceFailureException {
         int nr = 0;
         for (AggregationBase base : data.getAggregationBases()) {
             Map<AggregationLevel, AggregateCombo> presentLevels = base.getCombosByLevel();

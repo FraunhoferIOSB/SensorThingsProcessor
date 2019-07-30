@@ -20,6 +20,8 @@ package de.fraunhofer.iosb.ilt.stp.processors;
 import com.google.common.collect.ComparisonChain;
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.AbstractConfigurable;
+import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
+import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorClass;
@@ -149,7 +151,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
         @Override
         public int hashCode() {
-            return Objects.hash(waiting,combo,interval);
+            return Objects.hash(waiting, combo, interval);
         }
 
         @Override
@@ -222,8 +224,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private boolean running = false;
 
     @Override
-    public void configure(JsonElement config, Void context, Void edtCtx) {
-        super.configure(config, context, edtCtx);
+    public void configure(JsonElement config, Void context, Void edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
+        super.configure(config, context, edtCtx, ce);
         stsSource = sourceService.getService();
 
         zoneId = ZoneId.of(timeZone);
