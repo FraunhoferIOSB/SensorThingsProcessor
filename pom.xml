@@ -4,7 +4,7 @@
 
     <groupId>de.fraunhofer.iosb.ilt</groupId>
     <artifactId>SensorThingsProcessor</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>0.9</version>
     <packaging>jar</packaging>
 
     <name>SensorThings Processor</name>
@@ -52,7 +52,7 @@
         <connection>scm:git:git://github.com/hylkevds/SensorThingsProcessor.git</connection>
         <developerConnection>scm:git:ssh://github.com:hylkevds/SensorThingsProcessor.git</developerConnection>
         <url>https://github.com/hylkevds/SensorThingsProcessor/tree/master</url>
-        <tag>HEAD</tag>
+        <tag>v0.9</tag>
     </scm>
 
     <issueManagement>
