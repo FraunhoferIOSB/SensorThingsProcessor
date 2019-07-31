@@ -10,7 +10,7 @@
 
     <logger name="de.fraunhofer.iosb.ilt.sta" level="INFO"/>
     <logger name="de.fraunhofer.iosb.ilt.sta.query" level="INFO"/>
-    <logger name="org.reflections.Reflections" level="INFO"/>
+    <logger name="org.reflections8.Reflections" level="ERROR"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
