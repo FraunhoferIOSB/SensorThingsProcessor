@@ -4,6 +4,10 @@ Automatic processors for the OGC SensorThings API
 ## Configuring
 
 Start the jar with no options to open the configuration GUI.
+```
+java -jar SensorThingsProcessor-0.9-jar-with-dependencies.jar
+```
+
 
 ## Running
 
