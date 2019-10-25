@@ -16,8 +16,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mainClass>de.fraunhofer.iosb.ilt.stp.MainApp</mainClass>
         <docker-image-name>fraunhoferiosb/frost-processor</docker-image-name>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
 
         <Configurable.version>0.20</Configurable.version>
         <dockerfile-maven-plugin.version>1.3.7</dockerfile-maven-plugin.version>
