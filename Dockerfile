@@ -4,4 +4,4 @@ FROM openjdk:11
 ARG JAR_FILE
 ADD target/${JAR_FILE} /usr/local/FROST/FROST-Processor.jar
 WORKDIR /usr/local/FROST
-CMD ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseCGroupMemoryLimitForHeap", "-jar", "FROST-Processor.jar"]
+CMD ["java", "-jar", "FROST-Processor.jar"]
