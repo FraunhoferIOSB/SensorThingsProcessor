@@ -19,7 +19,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <maven.compiler.source>11</maven.compiler.source>
 
-        <Configurable.version>0.20</Configurable.version>
+        <Configurable.version>0.21</Configurable.version>
         <dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
         <FROST-Client.version>0.26</FROST-Client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
