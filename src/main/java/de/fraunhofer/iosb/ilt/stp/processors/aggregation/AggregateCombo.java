@@ -17,7 +17,6 @@
  */
 package de.fraunhofer.iosb.ilt.stp.processors.aggregation;
 
-import com.google.common.collect.ComparisonChain;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.dao.BaseDao;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
@@ -38,6 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.apache.commons.lang3.builder.CompareToBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -275,12 +275,15 @@ public class AggregateCombo implements Comparable<AggregateCombo> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(target,level,baseName);
+        return Objects.hash(target, level, baseName);
     }
 
     @Override
     public int compareTo(AggregateCombo o) {
-        return ComparisonChain.start().compare(level, o.level).compare(baseName, o.baseName).result();
+        return new CompareToBuilder()
+                .append(level, o.level)
+                .append(baseName, o.baseName)
+                .toComparison();
     }
 
     @Override

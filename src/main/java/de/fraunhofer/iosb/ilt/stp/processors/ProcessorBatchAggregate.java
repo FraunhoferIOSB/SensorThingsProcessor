@@ -17,7 +17,6 @@
  */
 package de.fraunhofer.iosb.ilt.stp.processors;
 
-import com.google.common.collect.ComparisonChain;
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.AbstractConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
@@ -71,6 +70,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.lang3.builder.CompareToBuilder;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
@@ -104,7 +104,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     private class CalculationOrder implements Delayed {
 
-        private AtomicBoolean waiting = new AtomicBoolean(true);
+        private final AtomicBoolean waiting = new AtomicBoolean(true);
         private final AggregateCombo combo;
         private final Interval interval;
         private final Instant targetTime;
@@ -162,12 +162,12 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         @Override
         public int compareTo(Delayed o) {
             CalculationOrder other = (CalculationOrder) o;
-            return ComparisonChain.start()
-                    .compare(targetMillis, other.targetMillis)
-                    .compareTrueFirst(waiting.get(), other.waiting.get())
-                    .compare(combo, other.combo)
-                    .compare(interval.getStart(), other.interval.getStart())
-                    .result();
+            return new CompareToBuilder()
+                    .append(targetMillis, other.targetMillis)
+                    .append(waiting.get(), other.waiting.get())
+                    .append(combo, other.combo)
+                    .append(interval.getStart(), other.interval.getStart())
+                    .toComparison();
         }
 
     }
@@ -213,14 +213,14 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private SensorThingsService stsSource;
     private AggregationData aggregationData;
 
-    private BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
-    private AtomicInteger messagesCount = new AtomicInteger(0);
-    private Set<CalculationOrder> orders = new HashSet<>();
+    private final BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
+    private final AtomicInteger messagesCount = new AtomicInteger(0);
+    private final Set<CalculationOrder> orders = new HashSet<>();
     private BlockingQueue<CalculationOrder> orderQueue;
     private MergeQueue<CalculationOrder> orderMerger;
     private ExecutorService orderExecutorService;
     private ExecutorService messageReceptionService;
-    private Aggregator aggregator = new Aggregator();
+    private final Aggregator aggregator = new Aggregator();
     private boolean running = false;
 
     @Override

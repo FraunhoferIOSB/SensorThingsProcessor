@@ -17,7 +17,6 @@
  */
 package de.fraunhofer.iosb.ilt.stp.sta;
 
-import com.google.common.base.Strings;
 import com.google.gson.JsonElement;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.Configurable;
@@ -27,6 +26,7 @@ import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorSubclass;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
+import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.Entity;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
@@ -152,9 +152,9 @@ public class Service implements Configurable<SensorThingsService, Object> {
     }
 
     public String getClientId() {
-        if (Strings.isNullOrEmpty(clientId)) {
+        if (Utils.isNullOrEmpty(clientId)) {
             clientId = editorMqttId.getValue();
-            if (Strings.isNullOrEmpty(clientId)) {
+            if (Utils.isNullOrEmpty(clientId)) {
                 clientId = "processor-" + UUID.randomUUID();
             }
         }
