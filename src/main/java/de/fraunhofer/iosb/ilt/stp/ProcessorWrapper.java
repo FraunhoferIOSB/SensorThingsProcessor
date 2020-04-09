@@ -145,7 +145,7 @@ public class ProcessorWrapper implements Configurable<Void, Void> {
         this.noAct = noAct;
         this.online = online;
         try {
-            JsonElement json = new JsonParser().parse(config);
+            JsonElement json = JsonParser.parseString(config);
             configure(json, null, null, null);
             processor.setNoAct(noAct);
             doProcess();

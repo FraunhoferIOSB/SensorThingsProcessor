@@ -122,7 +122,9 @@ public class AggregationData {
             Query<Thing> query = service.things()
                     .query()
                     .top(1000)
-                    .orderBy("id asc");
+                    .select("id,name,properties")
+                    .orderBy("id asc")
+                    .expand("MultiDatastreams($top=1000;$orderby=id asc;$select=id,name,properties)");
             if (hasListeners()) {
                 query.count();
             }
@@ -133,12 +135,7 @@ public class AggregationData {
             Iterator<Thing> thingIt = thingList.fullIterator();
             while (thingIt.hasNext()) {
                 Thing thing = thingIt.next();
-                EntityList<MultiDatastream> dsList = thing.multiDatastreams()
-                        .query()
-                        .filter("endsWith(name, ']')")
-                        .orderBy("id asc")
-                        .top(1000)
-                        .list();
+                EntityList<MultiDatastream> dsList = thing.getMultiDatastreams();
                 for (Iterator<MultiDatastream> it = dsList.fullIterator(); it.hasNext();) {
                     MultiDatastream mds = it.next();
                     String name = mds.getName();
@@ -371,7 +368,7 @@ public class AggregationData {
     private boolean checkProperty(Map<String, Object> properties, String property, Object value) {
         boolean changed = false;
         Object oldValue = properties.get(property);
-        if (!(value instanceof Number) && !(value instanceof Boolean) && !(value instanceof String)) {
+        if (!(value instanceof Number) && !(value instanceof Boolean) && !(value instanceof String) && value != null) {
             value = value.toString();
         }
         if (!value.equals(oldValue)) {
@@ -389,8 +386,8 @@ public class AggregationData {
             aggregate.setProperties(properties);
         }
         boolean changed = false;
-        changed = changed || checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_AMOUNT, level.amount);
-        changed = changed || checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_UNIT, level.unit);
+        changed = changed | checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_AMOUNT, level.amount);
+        changed = changed | checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_UNIT, level.unit);
 
         String aggFor = Objects.toString(properties.get(Utils.KEY_AGGREGATE_FOR));
         if (!expectedAggFor.equals(aggFor)) {
