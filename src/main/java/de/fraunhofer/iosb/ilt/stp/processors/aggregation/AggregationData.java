@@ -124,7 +124,7 @@ public class AggregationData {
                     .top(1000)
                     .select("id,name,properties")
                     .orderBy("id asc")
-                    .expand("MultiDatastreams($top=1000;$orderby=id asc;$select=id,name,properties)");
+                    .expand("MultiDatastreams($top=1000;$orderby=id asc;$select=id,name,properties,multiObservationDataTypes)");
             if (hasListeners()) {
                 query.count();
             }
