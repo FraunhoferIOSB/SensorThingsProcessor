@@ -28,6 +28,7 @@ import de.fraunhofer.iosb.ilt.configurable.editor.EditorInt;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorLong;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
+import de.fraunhofer.iosb.ilt.sta.StatusCodeException;
 import de.fraunhofer.iosb.ilt.sta.jackson.ObjectMapperFactory;
 import de.fraunhofer.iosb.ilt.sta.model.EntityType;
 import de.fraunhofer.iosb.ilt.sta.model.Id;
@@ -122,6 +123,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             orders.remove(this);
             try {
                 calculateAggregate(combo, interval);
+            } catch (StatusCodeException ex) {
+                LOGGER.error("Failed to calculate order: " + ex.getStatusCode() + ", " + ex.getReturnedContent(), ex);
             } catch (ServiceFailureException | ProcessException ex) {
                 LOGGER.error("Failed to calculate order!", ex);
             }
