@@ -25,7 +25,6 @@ import de.fraunhofer.iosb.ilt.sta.model.ext.EntityList;
 import de.fraunhofer.iosb.ilt.sta.query.Query;
 import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.aggregation.Utils;
-import de.fraunhofer.iosb.ilt.stp.utils.SensorThingsUtils;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -386,8 +385,8 @@ public class AggregationData {
             aggregate.setProperties(properties);
         }
         boolean changed = false;
-        changed = changed | checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_AMOUNT, level.amount);
-        changed = changed | checkProperty(properties, SensorThingsUtils.KEY_AGGREGATE_UNIT, level.unit);
+        changed = changed | checkProperty(properties, Utils.KEY_AGGREGATE_AMOUNT, level.amount);
+        changed = changed | checkProperty(properties, Utils.KEY_AGGREGATE_UNIT, level.unit);
 
         String aggFor = Objects.toString(properties.get(Utils.KEY_AGGREGATE_FOR));
         if (!expectedAggFor.equals(aggFor)) {

@@ -31,6 +31,8 @@ public class Utils {
 
     public static final Charset UTF8 = Charset.forName("UTF-8");
     public static final String KEY_AGGREGATE_FOR = "aggregateFor";
+    public static final String KEY_AGGREGATE_UNIT = "aggregateUnit";
+    public static final String KEY_AGGREGATE_AMOUNT = "aggregateAmount";
     public static final String LB = Pattern.quote("[");
     public static final String RB = Pattern.quote("]");
     public static final Pattern POSTFIX_PATTERN = Pattern.compile("(.+)" + LB + "([0-9]+ [a-zA-Z]+)" + RB);
