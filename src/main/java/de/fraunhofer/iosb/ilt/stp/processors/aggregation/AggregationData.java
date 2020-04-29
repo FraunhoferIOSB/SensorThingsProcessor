@@ -365,13 +365,18 @@ public class AggregationData {
     }
 
     private boolean checkProperty(Map<String, Object> properties, String property, Object value) {
+        Object checkValue = value;
         boolean changed = false;
         Object oldValue = properties.get(property);
         if (!(value instanceof Number) && !(value instanceof Boolean) && !(value instanceof String) && value != null) {
-            value = value.toString();
+            checkValue = value.toString();
         }
-        if (!value.equals(oldValue)) {
-            LOGGER.info("Fixing property {} not correct. Is {}, should be {}.", property, oldValue, value);
+        if (value instanceof Number && oldValue instanceof Number) {
+            checkValue = value.toString();
+            oldValue = oldValue.toString();
+        }
+        if (!checkValue.equals(oldValue)) {
+            LOGGER.info("Fixing property {}. Is {}, should be {}.", property, oldValue, value);
             properties.put(property, value);
             changed = true;
         }
@@ -400,7 +405,11 @@ public class AggregationData {
         }
         if (changed && fixReferences) {
             try {
-                service.update(aggregate);
+                MultiDatastream copy = aggregate.withOnlyId();
+                copy.setProperties(aggregate.getProperties());
+                copy.setMultiObservationDataTypes(null);
+                copy.setUnitOfMeasurements(null);
+                service.update(copy);
             } catch (ServiceFailureException ex) {
                 LOGGER.error("Failed to update reference.", ex);
             }
