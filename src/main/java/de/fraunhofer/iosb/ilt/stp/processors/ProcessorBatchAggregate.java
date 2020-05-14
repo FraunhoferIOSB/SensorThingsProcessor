@@ -223,6 +223,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private final Set<CalculationOrder> orders = new HashSet<>();
     private final AtomicLong ordersOpen = new AtomicLong();
     private final AtomicLong ordersTotal = new AtomicLong();
+    private final AtomicLong topicCount = new AtomicLong();
+    private final AtomicLong errorCount = new AtomicLong();
 
     private BlockingQueue<CalculationOrder> orderQueue;
     private MergeQueue<CalculationOrder> orderMerger;
@@ -385,32 +387,33 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
     }
 
+    private void workCalculateBases(final Iterator<AggregationBase> it) {
+        BlockingQueue<CalculationOrder> queue = new ArrayBlockingQueue<>(100);
+        orderMerger.addQueue(queue);
+        boolean moreWork = true;
+        while (moreWork) {
+            AggregationBase nextBase;
+            synchronized (it) {
+                if (it.hasNext()) {
+                    nextBase = it.next();
+                } else {
+                    LOGGER.warn("Nothing more to do...");
+                    break;
+                }
+            }
+            calculateAggregates(queue, nextBase.getCombos());
+        }
+        orderMerger.removeQueue(queue);
+    }
+
     private void calculateAggregates(AggregationData aggregationData) {
         Map<String, AggregationBase> targets = aggregationData.getCombosByBase();
         final Iterator<AggregationBase> it = targets.values().iterator();
         final List<Thread> threadList = new ArrayList<>();
         for (int i = 0; i < threads; i++) {
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    BlockingQueue<CalculationOrder> queue = new ArrayBlockingQueue<>(100);
-                    orderMerger.addQueue(queue);
-                    boolean moreWork = true;
-                    while (moreWork) {
-                        AggregationBase nextBase;
-                        synchronized (it) {
-                            if (it.hasNext()) {
-                                nextBase = it.next();
-                            } else {
-                                LOGGER.warn("Nothing more to do...");
-                                break;
-                            }
-                        }
-                        calculateAggregates(queue, nextBase.getCombos());
-                    }
-                    orderMerger.removeQueue(queue);
-                }
-            });
+            Thread t = new Thread(
+                    () -> workCalculateBases(it)
+            );
             threadList.add(t);
             t.start();
         }
@@ -423,33 +426,72 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
     }
 
+    private void messageReceived(final List<AggregateCombo> combos, String topic, MqttMessage message) {
+        if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
+            long count = messagesCount.getAndIncrement();
+            if (count > 1) {
+                loggingStatus.setMsgQueueCount(count);
+            }
+        } else {
+            LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
+        }
+    }
+
+    private void createSubscriptions(Map.Entry<String, List<AggregateCombo>> entry) throws MqttException {
+        String path = entry.getKey();
+        LOGGER.debug("Subscribing to: {}", path);
+        final List<AggregateCombo> combos = entry.getValue();
+        // First make sure we are up-to-date.
+        calculateAggregates(orderQueue, combos);
+        // Then add the subscription.
+        sourceService.subscribe(path, (String topic, MqttMessage message) -> {
+            messageReceived(combos, topic, message);
+        });
+        loggingStatus.setTopicCount(topicCount.incrementAndGet());
+    }
+
+    private void workCreateSubscriptions(final Iterator<Map.Entry<String, List<AggregateCombo>>> it) {
+        boolean moreWork = true;
+        while (moreWork) {
+            Map.Entry<String, List<AggregateCombo>> entry;
+            synchronized (it) {
+                if (it.hasNext()) {
+                    entry = it.next();
+                } else {
+                    LOGGER.debug("Nothing more to do...");
+                    break;
+                }
+            }
+            try {
+                createSubscriptions(entry);
+            } catch (MqttException ex) {
+                LOGGER.error("Failed to create subscription.", ex);
+                loggingStatus.setErrorCount(errorCount.incrementAndGet());
+            }
+        }
+    }
+
     private void createSubscriptions(AggregationData aggregationData) throws MqttException {
         Map<String, List<AggregateCombo>> comboBySource = aggregationData.getComboBySource();
         LOGGER.info("Found {} mqtt paths to watch.", comboBySource.keySet().size());
-        long topicCount = 0;
 
-        for (Map.Entry<String, List<AggregateCombo>> entry : comboBySource.entrySet()) {
-            String path = entry.getKey();
-            LOGGER.debug("Subscribing to: {}", path);
-            final List<AggregateCombo> combos = entry.getValue();
-
-            // First make sure we are up-to-date.
-            calculateAggregates(orderQueue, combos);
-
-            // Then add the subscription.
-            sourceService.subscribe(path, (String topic, MqttMessage message) -> {
-                if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
-                    long count = messagesCount.getAndIncrement();
-                    if (count > 1) {
-                        loggingStatus.setMsgQueueCount(count);
-                    }
-                } else {
-                    LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
-                }
-            });
-            topicCount++;
-            loggingStatus.setTopicCount(topicCount);
+        final Iterator<Map.Entry<String, List<AggregateCombo>>> it = comboBySource.entrySet().iterator();
+        final List<Thread> threadList = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            Thread t = new Thread(
+                    () -> workCreateSubscriptions(it)
+            );
+            threadList.add(t);
+            t.start();
         }
+        for (Thread thread : threadList) {
+            try {
+                thread.join();
+            } catch (InterruptedException ex) {
+                LOGGER.error("Interrupted while waiting for threads!");
+            }
+        }
+
     }
 
     private void createOrderFor(List<AggregateCombo> combos, String message) {
@@ -606,12 +648,18 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     private static class LoggingStatus extends ChangingStatusLogger.ChangingStatusDefault {
 
-        public static final String MESSAGE = "Topics: {}; MsgQueue: {}; Orders Open/Total {} / {}; ";
+        public static final String MESSAGE = "Topics: {}; MsgQueue: {}; Orders Open/Total {} / {}; Errors: {}";
         public final Object[] status;
 
         public LoggingStatus() {
-            super(new Object[4]);
+            super(new Object[5]);
             status = getLogParams();
+            Arrays.setAll(status, (int i) -> Long.valueOf(0));
+        }
+
+        public LoggingStatus setErrorCount(Long count) {
+            status[4] = count;
+            return this;
         }
 
         public LoggingStatus setMsgQueueCount(Long count) {
