@@ -365,7 +365,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             Instant calcIntervalEnd = calcIntervalStart.plus(combo.level.duration);
 
             if (lastSourcePhenTime.isBefore(calcIntervalEnd)) {
-                LOGGER.info("Nothing (more) to do for {}.", combo);
+                LOGGER.debug("Nothing (more) to do for {}.", combo);
                 return;
             }
 
