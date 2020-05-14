@@ -44,6 +44,7 @@ import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationBase;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.AggregationData;
 import de.fraunhofer.iosb.ilt.stp.processors.aggregation.Aggregator;
 import de.fraunhofer.iosb.ilt.stp.sta.Service;
+import de.fraunhofer.iosb.ilt.stp.utils.ChangingStatusLogger;
 import de.fraunhofer.iosb.ilt.stp.utils.MergeQueue;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -70,7 +71,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang3.builder.CompareToBuilder;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -121,6 +122,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         public void execute() {
             waiting.set(false);
             orders.remove(this);
+            loggingStatus.setOpenOrderCount(ordersOpen.decrementAndGet());
             try {
                 calculateAggregate(combo, interval);
             } catch (StatusCodeException ex) {
@@ -217,14 +219,20 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private AggregationData aggregationData;
 
     private final BlockingQueue<MessageContext> messagesToHandle = new LinkedBlockingQueue<>(RECEIVE_QUEUE_CAPACITY);
-    private final AtomicInteger messagesCount = new AtomicInteger(0);
+    private final AtomicLong messagesCount = new AtomicLong();
     private final Set<CalculationOrder> orders = new HashSet<>();
+    private final AtomicLong ordersOpen = new AtomicLong();
+    private final AtomicLong ordersTotal = new AtomicLong();
+
     private BlockingQueue<CalculationOrder> orderQueue;
     private MergeQueue<CalculationOrder> orderMerger;
     private ExecutorService orderExecutorService;
     private ExecutorService messageReceptionService;
     private final Aggregator aggregator = new Aggregator();
     private boolean running = false;
+
+    private final LoggingStatus loggingStatus = new LoggingStatus();
+    private final ChangingStatusLogger periodLogger = new ChangingStatusLogger(LOGGER, LoggingStatus.MESSAGE, loggingStatus);
 
     @Override
     public void configure(JsonElement config, Void context, Void edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
@@ -280,11 +288,11 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         Instant start = interval.getStart();
         Instant end = interval.getEnd();
         List<Observation> sourceObs = findObservations(combo, start, end);
-        LOGGER.info("Calculating {} using {} obs for {}.", interval, sourceObs.size(), combo);
+        LOGGER.debug("Calculating {} using {} obs for {}.", interval, sourceObs.size(), combo);
         if (sourceObs.isEmpty()) {
             return;
         }
-        LOGGER.debug("Obs:        {}/{}.", sourceObs.get(0).getPhenomenonTime(), sourceObs.get(sourceObs.size() - 1).getPhenomenonTime());
+        LOGGER.trace("Obs:        {}/{}.", sourceObs.get(0).getPhenomenonTime(), sourceObs.get(sourceObs.size() - 1).getPhenomenonTime());
 
         List<BigDecimal> result;
         try {
@@ -418,6 +426,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     private void createSubscriptions(AggregationData aggregationData) throws MqttException {
         Map<String, List<AggregateCombo>> comboBySource = aggregationData.getComboBySource();
         LOGGER.info("Found {} mqtt paths to watch.", comboBySource.keySet().size());
+        long topicCount = 0;
 
         for (Map.Entry<String, List<AggregateCombo>> entry : comboBySource.entrySet()) {
             String path = entry.getKey();
@@ -430,14 +439,16 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             // Then add the subscription.
             sourceService.subscribe(path, (String topic, MqttMessage message) -> {
                 if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
-                    int count = messagesCount.getAndIncrement();
+                    long count = messagesCount.getAndIncrement();
                     if (count > 1) {
-                        LOGGER.trace("Receive queue size: {}", count);
+                        loggingStatus.setMsgQueueCount(count);
                     }
                 } else {
                     LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
                 }
             });
+            topicCount++;
+            loggingStatus.setTopicCount(topicCount);
         }
     }
 
@@ -493,6 +504,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             while (!queue.offer(order, 1, TimeUnit.SECONDS)) {
                 LOGGER.warn("Could not offer order for a full second...");
             }
+            loggingStatus.setOpenOrderCount(ordersOpen.incrementAndGet());
+            loggingStatus.setTotalOrderCount(ordersTotal.incrementAndGet());
         } catch (InterruptedException exc) {
             LOGGER.warn("Rude wakeup.", exc);
         }
@@ -507,6 +520,8 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             return false;
         }
         orders.add(order);
+        loggingStatus.setOpenOrderCount(ordersOpen.incrementAndGet());
+        loggingStatus.setTotalOrderCount(ordersTotal.incrementAndGet());
         return true;
     }
 
@@ -516,6 +531,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     @Override
     public void process() {
+        periodLogger.start();
         orderQueue = new ArrayBlockingQueue<>(200 * threads);
         orderMerger = new MergeQueue<>(orderQueue);
         orderMerger.start();
@@ -523,11 +539,13 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         calculateAggregates(aggregationData);
         if (!running) {
             stopProcessors(30);
+            periodLogger.stop();
         }
     }
 
     @Override
     public void startListening() {
+        periodLogger.start();
         orderQueue = new DelayQueue<>();
         running = true;
         try {
@@ -537,7 +555,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 messageReceptionService = ProcessorHelper.createProcessors(
                         threads,
                         messagesToHandle, (MessageContext x) -> {
-                            messagesCount.decrementAndGet();
+                            loggingStatus.setMsgQueueCount(messagesCount.decrementAndGet());
                             createOrderFor(x.combos, x.message);
                         },
                         "Receiver");
@@ -562,6 +580,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         } catch (MqttException ex) {
             LOGGER.error("Problem while disconnecting!", ex);
         }
+        periodLogger.stop();
         LOGGER.debug("Done stopping ProcessorBatchAggregate.");
     }
 
@@ -583,5 +602,37 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             LOGGER.info("Stopping Processors...");
             ProcessorHelper.shutdownProcessors(orderExecutorService, orderQueue, waitSeconds, TimeUnit.SECONDS);
         }
+    }
+
+    private static class LoggingStatus extends ChangingStatusLogger.ChangingStatusDefault {
+
+        public static final String MESSAGE = "Topics: {}; MsgQueue: {}; Orders Open/Total {} / {}; ";
+        public final Object[] status;
+
+        public LoggingStatus() {
+            super(new Object[4]);
+            status = getLogParams();
+        }
+
+        public LoggingStatus setMsgQueueCount(Long count) {
+            status[1] = count;
+            return this;
+        }
+
+        public LoggingStatus setOpenOrderCount(Long count) {
+            status[2] = count;
+            return this;
+        }
+
+        public LoggingStatus setTotalOrderCount(Long count) {
+            status[3] = count;
+            return this;
+        }
+
+        public LoggingStatus setTopicCount(Long count) {
+            status[0] = count;
+            return this;
+        }
+
     }
 }

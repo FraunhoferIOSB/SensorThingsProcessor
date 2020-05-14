@@ -35,7 +35,7 @@ public class MergeQueue<T> {
      */
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(MergeQueue.class);
 
-    private List<BlockingQueue<T>> queues = new CopyOnWriteArrayList<>();
+    private final List<BlockingQueue<T>> queues = new CopyOnWriteArrayList<>();
     private final BlockingQueue<T> outputQueue;
     private boolean running = false;
     private Thread loopThread;
