@@ -427,12 +427,9 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     }
 
     private void messageReceived(final List<AggregateCombo> combos, String topic, MqttMessage message) {
-        if (messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
-            long count = messagesCount.getAndIncrement();
-            if (count > 1) {
-                loggingStatus.setMsgQueueCount(count);
-            }
-        } else {
+        loggingStatus.setMsgQueueCount(messagesCount.incrementAndGet());
+        if (!messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
+            loggingStatus.setMsgQueueCount(messagesCount.decrementAndGet());
             LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
         }
     }
