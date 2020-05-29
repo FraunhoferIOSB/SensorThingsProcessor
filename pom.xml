@@ -22,7 +22,7 @@
         <commons-io.version>2.7</commons-io.version>
         <commons-lang.version>3.10</commons-lang.version>
         <commons-math.version>3.6.1</commons-math.version>
-        <Configurable.version>0.23</Configurable.version>
+        <Configurable.version>0.24</Configurable.version>
         <dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
         <FROST-Client.version>0.31</FROST-Client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
