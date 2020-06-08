@@ -18,11 +18,11 @@
 package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
+import de.fraunhofer.iosb.ilt.configurable.AnnotatedConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
-import de.fraunhofer.iosb.ilt.configurable.Configurable;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
+import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
-import de.fraunhofer.iosb.ilt.configurable.editor.EditorMap;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorString;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorSubclass;
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
@@ -39,8 +39,7 @@ import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.ProcessException;
 import de.fraunhofer.iosb.ilt.stp.validator.Validator;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -64,24 +63,52 @@ import org.slf4j.LoggerFactory;
  *
  * @author scf
  */
-public class Service implements Configurable<SensorThingsService, Object> {
+public class Service implements AnnotatedConfigurable<SensorThingsService, Object> {
 
     /**
      * The logger for this class.
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(Service.class);
 
-    private EditorMap<Map<String, Object>> editor;
-    private EditorString editorService;
-    private EditorString editorMqttUrl;
-    private EditorString editorMqttId;
-    private EditorSubclass<Object, Object, AuthMethod> editorAuthMethod;
-    private EditorBoolean editorUseDataArray;
-    private EditorSubclass<SensorThingsService, Object, Validator> editorValidator;
+    @ConfigurableField(editor = EditorString.class,
+            label = "Service URL", description = "The url of the server to aggregate for.")
+    @EditorString.EdOptsString(dflt = "http://localhost:8080/FROST-Server/v1.0")
+    private String serviceUrl;
+
+    @ConfigurableField(editor = EditorString.class,
+            label = "MQTT Url", description = "Connection url for the mqtt service.")
+    @EditorString.EdOptsString(dflt = "tcp://localhost:1883")
+    private String mqttUrl;
+
+    @ConfigurableField(editor = EditorString.class,
+            label = "MQTT ClientId", description = "Client ID to use with MQTT. Leave emtpy for random.")
+    @EditorString.EdOptsString(dflt = "http://localhost:8080/FROST-Server/v1.0")
+    private String mqttId;
+
+    @ConfigurableField(editor = EditorSubclass.class,
+            label = "Auth Method", description = "The authentication method the service uses.",
+            optional = true)
+    @EditorSubclass.EdOptsSubclass(
+            iface = AuthMethod.class)
+    private AuthMethod authMethod;
+
+    @ConfigurableField(editor = EditorBoolean.class,
+            label = "Use DataArrays",
+            description = "Use the SensorThingsAPI DataArray extension to post Observations. "
+            + "This is much more efficient when posting many observations. "
+            + "The number of items grouped together is determined by the messageInterval setting.")
+    @EditorBoolean.EdOptsBool()
+    private boolean useDataArrays;
+
+    @ConfigurableField(editor = EditorSubclass.class,
+            label = "Validator", description = "The validator to use.",
+            optional = true)
+    @EditorSubclass.EdOptsSubclass(
+            iface = Validator.class)
+    private Validator validator;
 
     private SensorThingsService service;
     private boolean noAct = false;
-    private boolean dataArray = false;
 
     private final Map<Entity, DataArrayValue> davMap = new HashMap<>();
 
@@ -93,67 +120,36 @@ public class Service implements Configurable<SensorThingsService, Object> {
     private int updated = 0;
     private String clientId;
     private MqttClient client;
-    private Validator validator;
 
     private final Map<String, List<IMqttMessageListener>> mqttSubscriptions = new HashMap<>();
 
     @Override
-    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> ce) throws ConfigurationException {
+    public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
+        AnnotatedConfigurable.super.configure(config, context, edtCtx, configEditor);
+
         service = context;
         if (service == null) {
             service = new SensorThingsService();
         }
-        getConfigEditor(service, edtCtx).setConfig(config);
-        dataArray = editorUseDataArray.getValue();
+
         try {
-            service.setEndpoint(new URI(editorService.getValue()));
-            AuthMethod authMethod = editorAuthMethod.getValue();
+            service.setEndpoint(new URL(serviceUrl));
             if (authMethod != null) {
                 authMethod.setAuth(service);
             }
-        } catch (MalformedURLException | URISyntaxException ex) {
+        } catch (MalformedURLException ex) {
             LOGGER.error("Failed to create service.", ex);
             throw new IllegalArgumentException("Failed to create service.", ex);
         }
 
-        validator = editorValidator.getValue();
         if (validator == null) {
             validator = new Validator.ValidatorNull();
         }
     }
 
-    @Override
-    public ConfigEditor<?> getConfigEditor(SensorThingsService context, Object edtCtx) {
-        if (editor == null) {
-            editor = new EditorMap<>();
-            editorService = new EditorString("http://localhost:8080/FROST-Server/v1.0", 1, "Service URL", "The url of the server.");
-            editor.addOption("serviceUrl", editorService, false);
-
-            editorMqttUrl = new EditorString("tcp://localhost:1883", 1, "MQTT Url", "Connection url for the mqtt service");
-            editor.addOption("mqttUrl", editorMqttUrl, true);
-
-            editorMqttId = new EditorString("", 1, "MQTT ClientId", "Client ID to use with MQTT. Leave emtpy for random.");
-            editor.addOption("mqttId", editorMqttId, true);
-
-            editorAuthMethod = new EditorSubclass<>(null, null, AuthMethod.class, "Auth Method", "The authentication method the service uses.", false, "className");
-            editor.addOption("authMethod", editorAuthMethod, true);
-
-            editorUseDataArray = new EditorBoolean(false, "Use DataArrays",
-                    "Use the SensorThingsAPI DataArray extension to post Observations. "
-                    + "This is much more efficient when posting many observations. "
-                    + "The number of items grouped together is determined by the messageInterval setting.");
-            editor.addOption("useDataArrays", editorUseDataArray, true);
-
-            editorValidator = new EditorSubclass(service, edtCtx, Validator.class, "Validator", "The validator to use.", false, "className");
-            editor.addOption("validator", editorValidator, true);
-        }
-        return editor;
-
-    }
-
     public String getClientId() {
         if (Utils.isNullOrEmpty(clientId)) {
-            clientId = editorMqttId.getValue();
+            clientId = mqttId;
             if (Utils.isNullOrEmpty(clientId)) {
                 clientId = "processor-" + UUID.randomUUID();
             }
@@ -164,8 +160,8 @@ public class Service implements Configurable<SensorThingsService, Object> {
     public synchronized MqttClient getMqttClient() throws MqttException {
         if (client == null) {
             String myClientId = getClientId();
-            LOGGER.info("Connecting to {} using clientId {}.", editorMqttUrl.getValue(), myClientId);
-            client = new MqttClient(editorMqttUrl.getValue(), myClientId);
+            LOGGER.info("Connecting to {} using clientId {}.", mqttUrl, myClientId);
+            client = new MqttClient(mqttUrl, myClientId);
             MqttConnectOptions connOpts = new MqttConnectOptions();
             connOpts.setAutomaticReconnect(true);
             connOpts.setCleanSession(false);
@@ -279,10 +275,10 @@ public class Service implements Configurable<SensorThingsService, Object> {
         if (obs.getId() != null && !noAct) {
             service.update(obs);
             updated++;
-        } else if (!dataArray && !noAct) {
+        } else if (!useDataArrays && !noAct) {
             service.create(obs);
             inserted++;
-        } else if (dataArray) {
+        } else if (useDataArrays) {
             addToDataArray(obs);
         }
     }

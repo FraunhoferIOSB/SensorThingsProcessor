@@ -17,7 +17,6 @@
  */
 package de.fraunhofer.iosb.ilt.stp.sta;
 
-import de.fraunhofer.iosb.ilt.configurable.AbstractConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.AnnotatedConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.annotations.ConfigurableField;
 import de.fraunhofer.iosb.ilt.configurable.editor.EditorBoolean;
@@ -72,7 +71,6 @@ public class AuthBasic implements AnnotatedConfigurable<Void, Void>, AuthMethod 
     @Override
     public void setAuth(SensorThingsService service) {
         try {
-
             CredentialsProvider credsProvider = new BasicCredentialsProvider();
             URL url = service.getEndpoint();
             credsProvider.setCredentials(
