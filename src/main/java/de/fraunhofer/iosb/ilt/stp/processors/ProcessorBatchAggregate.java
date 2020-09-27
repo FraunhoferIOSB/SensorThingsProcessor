@@ -497,8 +497,12 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             Id sourceId = mainCombo.getSourceId();
             EntityType sourceType = mainCombo.getSourceType();
             Observation obs = parseMessageToObservation(message);
-            for (AggregateCombo combo : combos) {
-                createOrdersFor(combo, obs, sourceType, sourceId);
+            if (obs.getPhenomenonTime() == null) {
+                LOGGER.error("Received Observation with no PhenomenonTime. Message: {}", message);
+            } else {
+                for (AggregateCombo combo : combos) {
+                    createOrdersFor(combo, obs, sourceType, sourceId);
+                }
             }
         } catch (IOException ex) {
             LOGGER.error("Invalid message.", ex);
