@@ -1,4 +1,4 @@
-# SensorThingsProcessor [![Build Status](https://travis-ci.org/FraunhoferIOSB/SensorThingsProcessor.svg?branch=master)](https://travis-ci.org/FraunhoferIOSB/SensorThingsProcessor)
+# SensorThingsProcessor [![Build Status](https://api.travis-ci.com/FraunhoferIOSB/SensorThingsProcessor.svg?branch=master)](https://travis-ci.com/FraunhoferIOSB/SensorThingsProcessor)
 Automatic processors for the OGC SensorThings API
 
 ## Configuring
