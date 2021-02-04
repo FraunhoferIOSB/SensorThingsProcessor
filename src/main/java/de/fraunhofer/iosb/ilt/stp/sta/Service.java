@@ -207,17 +207,23 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
     }
 
     private void resubscribeAll() {
+        LOGGER.info("Resubscribing all topics...");
+        int success = 0;
+        int failed = 0;
         for (Map.Entry<String, List<IMqttMessageListener>> entry : mqttSubscriptions.entrySet()) {
             String topic = entry.getKey();
             List<IMqttMessageListener> listeners = entry.getValue();
             for (IMqttMessageListener listener : listeners) {
                 try {
                     client.subscribe(topic, listener);
+                    success++;
                 } catch (MqttException exc) {
-                    LOGGER.error("Failed to re-subscript to topic.", exc);
+                    LOGGER.error("Failed to re-subscripe to topic: {}", exc.getMessage());
+                    failed++;
                 }
             }
         }
+        LOGGER.info("Resubscribed to {} topics, failed: {}...", success, failed);
     }
 
     public synchronized void unsubscribeAll() {
@@ -226,7 +232,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
             try {
                 removeSubscriptions(topic);
             } catch (MqttException exc) {
-                LOGGER.error("Failed to un-subscript to topic.", exc);
+                LOGGER.error("Failed to un-subscripe from topic.", exc.getMessage());
             }
         }
     }
