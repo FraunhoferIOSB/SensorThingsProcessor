@@ -139,19 +139,15 @@ public class AggregateCombo implements Comparable<AggregateCombo> {
         }
     }
 
-    public List<Observation> getObservationsForSource(Instant start, Instant end) {
+    public List<Observation> getObservationsForSource(Instant start, Instant end) throws ServiceFailureException {
         List<Observation> result = new ArrayList<>();
         if (hasSource()) {
-            try {
-                StringBuilder filter = new StringBuilder();
-                filter.append("overlaps(phenomenonTime,").append(start.toString()).append("/").append(end.toString()).append(")");
-                EntityList<Observation> entityList = getObsDaoForSource().query().filter(filter.toString()).orderBy("phenomenonTime asc").top(1000).list();
-                for (Iterator<Observation> it = entityList.fullIterator(); it.hasNext();) {
-                    Observation entity = it.next();
-                    result.add(entity);
-                }
-            } catch (ServiceFailureException ex) {
-                LOGGER.error("Failed to fetch observations.", ex);
+            StringBuilder filter = new StringBuilder();
+            filter.append("overlaps(phenomenonTime,").append(start.toString()).append("/").append(end.toString()).append(")");
+            EntityList<Observation> entityList = getObsDaoForSource().query().filter(filter.toString()).orderBy("phenomenonTime asc").top(1000).list();
+            for (Iterator<Observation> it = entityList.fullIterator(); it.hasNext();) {
+                Observation entity = it.next();
+                result.add(entity);
             }
         }
         return result;

@@ -266,7 +266,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
     }
 
-    private List<Observation> findObservations(AggregateCombo combo, Instant start, Instant end) {
+    private List<Observation> findObservations(AggregateCombo combo, Instant start, Instant end) throws ServiceFailureException {
         if (cacheObs && combo.getSourceType() == EntityType.DATASTREAM) {
             WeakReference<Observation> weakRef;
             synchronized (obsCache) {
