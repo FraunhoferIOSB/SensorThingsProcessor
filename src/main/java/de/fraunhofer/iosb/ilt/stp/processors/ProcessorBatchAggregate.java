@@ -124,21 +124,21 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             waiting.set(false);
             orders.remove(this);
             loggingStatus.setOpenOrderCount(ordersOpen.decrementAndGet());
-            boolean failed = false;
             try {
                 calculateAggregate(combo, interval);
+                return;
             } catch (StatusCodeException ex) {
-                LOGGER.error("Failed to calculate order: {},{}", ex.getStatusCode(), ex.getReturnedContent(), ex);
-                failed = true;
+                LOGGER.error("Failed to calculate order: {},{}", ex.getStatusCode(), ex.getReturnedContent());
             } catch (ServiceFailureException | ProcessException ex) {
                 LOGGER.error("Failed to calculate order: {}", ex.getMessage());
-                failed = true;
             }
-            if (failed && retries < 5) {
+            if (retries < 5) {
                 retries++;
                 waiting.set(true);
                 offerOrder(this);
+                return;
             }
+            LOGGER.error("Failed to calculate order after 5 tries: {} {}", combo, interval);
         }
 
         public Instant getTargetTime() {
