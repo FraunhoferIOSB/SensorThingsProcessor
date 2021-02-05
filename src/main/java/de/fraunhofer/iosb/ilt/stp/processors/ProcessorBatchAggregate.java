@@ -111,6 +111,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         private final Interval interval;
         private final Instant targetTime;
         private final long targetMillis;
+        private int retries = 0;
 
         public CalculationOrder(AggregateCombo combo, Interval interval, Instant delayUntill) {
             this.combo = combo;
@@ -123,12 +124,20 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             waiting.set(false);
             orders.remove(this);
             loggingStatus.setOpenOrderCount(ordersOpen.decrementAndGet());
+            boolean failed = false;
             try {
                 calculateAggregate(combo, interval);
             } catch (StatusCodeException ex) {
-                LOGGER.error("Failed to calculate order: " + ex.getStatusCode() + ", " + ex.getReturnedContent(), ex);
+                LOGGER.error("Failed to calculate order: {},{}", ex.getStatusCode(), ex.getReturnedContent(), ex);
+                failed = true;
             } catch (ServiceFailureException | ProcessException ex) {
-                LOGGER.error("Failed to calculate order!", ex);
+                LOGGER.error("Failed to calculate order: {}", ex.getMessage());
+                failed = true;
+            }
+            if (failed && retries < 5) {
+                retries++;
+                waiting.set(true);
+                offerOrder(this);
             }
         }
 
