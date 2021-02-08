@@ -16,17 +16,20 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mainClass>de.fraunhofer.iosb.ilt.stp.MainApp</mainClass>
         <docker-image-name>fraunhoferiosb/frost-processor</docker-image-name>
-        <maven.compiler.target>8</maven.compiler.target>
-        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
 
         <commons-io.version>2.8.0</commons-io.version>
         <commons-lang.version>3.11</commons-lang.version>
         <commons-math.version>3.6.1</commons-math.version>
         <Configurable.version>0.29</Configurable.version>
         <dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
-        <FROST-Client.version>0.33</FROST-Client.version>
+        <FROST-Client.version>0.34</FROST-Client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
+        <logback.version>1.2.3</logback.version>
         <openjfx.version>15.0.1</openjfx.version>
+        <paho.version>1.2.5</paho.version>
+        <slf4j.version>1.7.30</slf4j.version>
     </properties>
 
     <licenses>
@@ -63,13 +66,16 @@
         <url>https://github.com/hylkevds/SensorThingsProcessor/issues</url>
     </issueManagement>
 
-    <repositories>
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
         <repository>
-            <id>bintray-fraunhoferiosb-Maven</id>
-            <name>bintray</name>
-            <url>https://dl.bintray.com/fraunhoferiosb/Maven</url>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
         </repository>
-    </repositories>
+    </distributionManagement>
 
     <build>
         <plugins>
@@ -185,17 +191,17 @@
         <dependency>
             <groupId>org.eclipse.paho</groupId>
             <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
-            <version>1.2.5</version>
+            <version>${paho.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
-            <version>1.7.30</version>
+            <version>${slf4j.version}</version>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.2.3</version>
+            <version>${logback.version}</version>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
