@@ -27,7 +27,7 @@
         <FROST-Client.version>0.34</FROST-Client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
         <logback.version>1.2.3</logback.version>
-        <openjfx.version>15.0.1</openjfx.version>
+        <openjfx.version>16</openjfx.version>
         <paho.version>1.2.5</paho.version>
         <slf4j.version>1.7.30</slf4j.version>
     </properties>
