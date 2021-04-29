@@ -18,6 +18,12 @@
 package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
+import com.hivemq.client.mqtt.MqttWebSocketConfig;
+import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
+import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
+import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish;
+import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAck;
+import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAckReturnCode;
 import de.fraunhofer.iosb.ilt.configurable.AnnotatedConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
@@ -39,6 +45,8 @@ import de.fraunhofer.iosb.ilt.sta.service.SensorThingsService;
 import de.fraunhofer.iosb.ilt.stp.ProcessException;
 import de.fraunhofer.iosb.ilt.stp.validator.Validator;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,13 +57,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
-import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,9 +123,9 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
     private int inserted = 0;
     private int updated = 0;
     private String clientId;
-    private MqttClient client;
+    private Mqtt3AsyncClient client;
 
-    private final Map<String, List<IMqttMessageListener>> mqttSubscriptions = new HashMap<>();
+    private final Map<String, List<Consumer<Mqtt3Publish>>> mqttSubscriptions = new HashMap<>();
 
     @Override
     public void configure(JsonElement config, SensorThingsService context, Object edtCtx, ConfigEditor<?> configEditor) throws ConfigurationException {
@@ -157,47 +161,36 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
         return clientId;
     }
 
-    public synchronized MqttClient getMqttClient() throws MqttException {
+    public synchronized Mqtt3AsyncClient getMqttClient() throws URISyntaxException {
         if (client == null) {
             String myClientId = getClientId();
+            URI url = new URI(mqttUrl);
             LOGGER.info("Connecting to {} using clientId {}.", mqttUrl, myClientId);
-            client = new MqttClient(mqttUrl, myClientId);
-            MqttConnectOptions connOpts = new MqttConnectOptions();
-            connOpts.setAutomaticReconnect(true);
-            connOpts.setCleanSession(false);
-            connOpts.setKeepAliveInterval(60);
-            connOpts.setConnectionTimeout(30);
-            client.setCallback(new MqttCallbackExtended() {
-                @Override
-                public void connectionLost(Throwable cause) {
-                    LOGGER.info("connectionLost");
-                }
-
-                @Override
-                public void messageArrived(String topic, MqttMessage message) throws Exception {
-                }
-
-                @Override
-                public void deliveryComplete(IMqttDeliveryToken token) {
-                }
-
-                @Override
-                public void connectComplete(boolean reconnect, String serverURI) {
-                    resubscribeAll();
-                }
-            });
-            client.connect(connOpts);
+            client = Mqtt3Client.builder()
+                    .identifier(myClientId)
+                    .serverHost(url.getHost())
+                    .serverPort(url.getPort())
+                    .webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build())
+                    .sslWithDefaultConfig()
+                    .addConnectedListener((context) -> {
+                        resubscribeAll();
+                    })
+                    .addDisconnectedListener((context) -> {
+                        LOGGER.info("connectionLost");
+                    })
+                    .buildAsync();
+            client.connect();
         }
         return client;
     }
 
-    public synchronized void closeMqttClient() throws MqttException {
+    public synchronized void closeMqttClient() {
         LOGGER.info("Unsubscribing all topics...");
         unsubscribeAll();
         if (client == null) {
             return;
         }
-        if (client.isConnected()) {
+        if (client.getState().isConnected()) {
             LOGGER.info("Stopping MQTT client...");
             client.disconnect();
         } else {
@@ -208,37 +201,44 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
 
     private void resubscribeAll() {
         LOGGER.info("Resubscribing all topics...");
-        int success = 0;
+        int total = 0;
         int failed = 0;
-        for (Map.Entry<String, List<IMqttMessageListener>> entry : mqttSubscriptions.entrySet()) {
+        List<CompletableFuture<Mqtt3SubAck>> futures = new ArrayList<>();
+        for (Map.Entry<String, List<Consumer<Mqtt3Publish>>> entry : mqttSubscriptions.entrySet()) {
             String topic = entry.getKey();
-            List<IMqttMessageListener> listeners = entry.getValue();
-            for (IMqttMessageListener listener : listeners) {
-                try {
-                    client.subscribe(topic, listener);
-                    success++;
-                } catch (MqttException exc) {
-                    LOGGER.error("Failed to re-subscripe to topic: {}", exc.getMessage());
-                    failed++;
-                }
+            List<Consumer<Mqtt3Publish>> listeners = entry.getValue();
+            for (Consumer<Mqtt3Publish> listener : listeners) {
+                futures.add(
+                        client.subscribeWith().topicFilter(topic).callback(listener).send()
+                );
+                total++;
             }
         }
-        LOGGER.info("Resubscribed to {} topics, failed: {}...", success, failed);
+        for (CompletableFuture<Mqtt3SubAck> future : futures) {
+            try {
+                for (Mqtt3SubAckReturnCode item : future.get().getReturnCodes()) {
+                    if (item.isError()) {
+                        LOGGER.error("Failed to re-subscripe to topic: {}", item);
+                        failed++;
+                    }
+                }
+            } catch (InterruptedException | ExecutionException exc) {
+                LOGGER.error("Failed to re-subscripe to topic: {}", exc.getMessage());
+                failed++;
+            }
+        }
+        LOGGER.info("Resubscribed to {} topics, failed: {}...", total, failed);
     }
 
     public synchronized void unsubscribeAll() {
         String[] topics = mqttSubscriptions.keySet().toArray(new String[0]);
         for (String topic : topics) {
-            try {
-                removeSubscriptions(topic);
-            } catch (MqttException exc) {
-                LOGGER.error("Failed to un-subscripe from topic.", exc.getMessage());
-            }
+            removeSubscriptions(topic);
         }
     }
 
-    private List<IMqttMessageListener> getSubscriptionListForTopic(String topic) {
-        List<IMqttMessageListener> listeners = mqttSubscriptions.get(topic);
+    private List<Consumer<Mqtt3Publish>> getSubscriptionListForTopic(String topic) {
+        List<Consumer<Mqtt3Publish>> listeners = mqttSubscriptions.get(topic);
         if (listeners == null) {
             listeners = new ArrayList<>();
             mqttSubscriptions.put(topic, listeners);
@@ -246,20 +246,20 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
         return listeners;
     }
 
-    public synchronized void removeSubscriptions(String topic) throws MqttException {
+    public synchronized void removeSubscriptions(String topic) {
         mqttSubscriptions.remove(topic);
-        if (client == null || !client.isConnected()) {
+        if (client == null || !client.getState().isConnected()) {
             return;
         }
-        client.unsubscribe(topic);
+        client.unsubscribeWith().addTopicFilter(topic).send();
     }
 
-    public synchronized void subscribe(String topic, IMqttMessageListener messageListener) throws MqttException {
+    public synchronized void subscribe(String topic, Consumer<Mqtt3Publish> messageListener) {
         getSubscriptionListForTopic(topic).add(messageListener);
-        if (client == null || !client.isConnected()) {
+        if (client == null || !client.getState().isConnected()) {
             return;
         }
-        client.subscribe(topic, messageListener);
+        client.subscribeWith().topicFilter(topic).callback(messageListener).send();
     }
 
     public void setNoAct(boolean noAct) {

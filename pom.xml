@@ -25,10 +25,10 @@
         <Configurable.version>0.30</Configurable.version>
         <dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
         <FROST-Client.version>0.34</FROST-Client.version>
+        <hivemq-client.version>1.2.2</hivemq-client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
         <logback.version>1.2.3</logback.version>
         <openjfx.version>16</openjfx.version>
-        <paho.version>1.2.5</paho.version>
         <slf4j.version>1.7.30</slf4j.version>
     </properties>
 
@@ -189,9 +189,15 @@
             <version>${commons-math.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.paho</groupId>
-            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
-            <version>${paho.version}</version>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-mqtt-client</artifactId>
+            <version>${hivemq-client.version}</version>        
+        </dependency>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-mqtt-client-websocket</artifactId>
+            <version>${hivemq-client.version}</version>
+            <type>pom</type>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

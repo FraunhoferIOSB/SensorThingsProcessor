@@ -18,6 +18,7 @@
 package de.fraunhofer.iosb.ilt.stp.processors;
 
 import com.google.gson.JsonElement;
+import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish;
 import de.fraunhofer.iosb.ilt.configurable.AbstractConfigurable;
 import de.fraunhofer.iosb.ilt.configurable.ConfigEditor;
 import de.fraunhofer.iosb.ilt.configurable.ConfigurationException;
@@ -49,6 +50,7 @@ import de.fraunhofer.iosb.ilt.stp.utils.MergeQueue;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -73,8 +75,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang3.builder.CompareToBuilder;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.extra.Interval;
@@ -435,23 +435,24 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
         }
     }
 
-    private void messageReceived(final List<AggregateCombo> combos, String topic, MqttMessage message) {
+    private void messageReceived(final List<AggregateCombo> combos, String topic, Mqtt3Publish message) {
         loggingStatus.setMsgQueueCount(messagesCount.incrementAndGet());
-        if (!messagesToHandle.offer(new MessageContext(combos, topic, message.toString()))) {
+        String body = new String(message.getPayloadAsBytes(), Utils.UTF8);
+        if (!messagesToHandle.offer(new MessageContext(combos, topic, body))) {
             loggingStatus.setMsgQueueCount(messagesCount.decrementAndGet());
             LOGGER.error("Receive queue is full! More than {} messages in backlog", RECEIVE_QUEUE_CAPACITY);
         }
     }
 
-    private void createSubscriptions(Map.Entry<String, List<AggregateCombo>> entry) throws MqttException {
+    private void createSubscriptions(Map.Entry<String, List<AggregateCombo>> entry) {
         String path = entry.getKey();
         LOGGER.debug("Subscribing to: {}", path);
         final List<AggregateCombo> combos = entry.getValue();
         // First make sure we are up-to-date.
         calculateAggregates(orderQueue, combos);
         // Then add the subscription.
-        sourceService.subscribe(path, (String topic, MqttMessage message) -> {
-            messageReceived(combos, topic, message);
+        sourceService.subscribe(path, (message) -> {
+            messageReceived(combos, path, message);
         });
         loggingStatus.setTopicCount(topicCount.incrementAndGet());
     }
@@ -468,16 +469,11 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                     break;
                 }
             }
-            try {
-                createSubscriptions(entry);
-            } catch (MqttException ex) {
-                LOGGER.error("Failed to create subscription.", ex);
-                loggingStatus.setErrorCount(errorCount.incrementAndGet());
-            }
+            createSubscriptions(entry);
         }
     }
 
-    private void createSubscriptions(AggregationData aggregationData) throws MqttException {
+    private void createSubscriptions(AggregationData aggregationData) {
         Map<String, List<AggregateCombo>> comboBySource = aggregationData.getComboBySource();
         LOGGER.info("Found {} mqtt paths to watch.", comboBySource.keySet().size());
 
@@ -613,7 +609,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                         "Receiver");
             }
             createSubscriptions(aggregationData);
-        } catch (MqttException ex) {
+        } catch (URISyntaxException ex) {
             throw new IllegalArgumentException(ex);
         }
     }
@@ -622,16 +618,14 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     public void stopListening() {
         LOGGER.debug("Stopping ProcessorBatchAggregate...");
         running = false;
-        try {
-            sourceService.closeMqttClient();
-            if (messageReceptionService != null) {
-                LOGGER.info("Stopping Receivers...");
-                ProcessorHelper.shutdownProcessors(messageReceptionService, messagesToHandle, 5, TimeUnit.SECONDS);
-            }
-            stopProcessors(5);
-        } catch (MqttException ex) {
-            LOGGER.error("Problem while disconnecting!", ex);
+
+        sourceService.closeMqttClient();
+        if (messageReceptionService != null) {
+            LOGGER.info("Stopping Receivers...");
+            ProcessorHelper.shutdownProcessors(messageReceptionService, messagesToHandle, 5, TimeUnit.SECONDS);
         }
+        stopProcessors(5);
+
         periodLogger.stop();
         LOGGER.debug("Done stopping ProcessorBatchAggregate.");
     }
