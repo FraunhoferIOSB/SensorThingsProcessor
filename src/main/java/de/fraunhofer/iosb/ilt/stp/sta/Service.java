@@ -19,6 +19,7 @@ package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
 import com.hivemq.client.mqtt.MqttWebSocketConfig;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish;
@@ -73,6 +74,8 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
      * The logger for this class.
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(Service.class);
+
+    private static final MqttQos DEFAULT_QOS = MqttQos.AT_LEAST_ONCE;
 
     @ConfigurableField(editor = EditorString.class,
             label = "Service URL", description = "The url of the server to aggregate for.")
@@ -209,7 +212,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
             List<Consumer<Mqtt3Publish>> listeners = entry.getValue();
             for (Consumer<Mqtt3Publish> listener : listeners) {
                 futures.add(
-                        client.subscribeWith().topicFilter(topic).callback(listener).send()
+                        client.subscribeWith().topicFilter(topic).qos(DEFAULT_QOS).callback(listener).send()
                 );
                 total++;
             }
@@ -259,7 +262,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
         if (client == null || !client.getState().isConnected()) {
             return;
         }
-        client.subscribeWith().topicFilter(topic).callback(messageListener).send();
+        client.subscribeWith().topicFilter(topic).qos(DEFAULT_QOS).callback(messageListener).send();
     }
 
     public void setNoAct(boolean noAct) {
@@ -363,7 +366,6 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
     }
 
     public Iterator<Thing> getAllThings() {
-        List<Thing> result = new ArrayList<>();
         try {
             EntityList<Thing> list = service.things().query().list();
             return list.fullIterator();
