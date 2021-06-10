@@ -21,6 +21,7 @@ import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
 import de.fraunhofer.iosb.ilt.sta.Utils;
 import de.fraunhofer.iosb.ilt.stp.options.Option;
 import de.fraunhofer.iosb.ilt.stp.options.Parameter;
+import de.fraunhofer.iosb.ilt.stp.utils.GitVersionInfo;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -72,6 +73,7 @@ public class MainApp {
      * @throws ServiceFailureException
      */
     public static void main(String[] args) throws URISyntaxException, IOException, MalformedURLException, ServiceFailureException {
+        GitVersionInfo.logGitInfo();
         String configuration = getEnv(TAG_CONFIGURATION, "");
         boolean onLine = getEnv(TAG_ONLINE, true);
         boolean dryRun = getEnv(TAG_DRY_RUN, false);
