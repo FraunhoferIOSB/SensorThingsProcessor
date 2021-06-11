@@ -22,6 +22,7 @@ import com.hivemq.client.mqtt.MqttWebSocketConfig;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
+import com.hivemq.client.mqtt.mqtt3.Mqtt3ClientBuilder;
 import com.hivemq.client.mqtt.mqtt3.message.publish.Mqtt3Publish;
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAck;
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAckReturnCode;
@@ -169,19 +170,21 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
             String myClientId = getClientId();
             URI url = new URI(mqttUrl);
             LOGGER.info("Connecting to {} using clientId {}.", mqttUrl, myClientId);
-            client = Mqtt3Client.builder()
+            Mqtt3ClientBuilder builder = Mqtt3Client.builder()
                     .identifier(myClientId)
                     .serverHost(url.getHost())
                     .serverPort(url.getPort())
                     .webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build())
-                    .sslWithDefaultConfig()
                     .addConnectedListener((context) -> {
                         resubscribeAll();
                     })
                     .addDisconnectedListener((context) -> {
                         LOGGER.info("connectionLost");
-                    })
-                    .buildAsync();
+                    });
+            if (mqttUrl.startsWith("tcps")) {
+                builder = builder.sslWithDefaultConfig();
+            }
+            client = builder.buildAsync();
             client.connect();
         }
         return client;
