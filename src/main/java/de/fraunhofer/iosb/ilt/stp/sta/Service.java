@@ -174,15 +174,17 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
                     .identifier(myClientId)
                     .serverHost(url.getHost())
                     .serverPort(url.getPort())
-                    .webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build())
                     .addConnectedListener((context) -> {
                         resubscribeAll();
                     })
                     .addDisconnectedListener((context) -> {
                         LOGGER.info("connectionLost");
                     });
-            if (mqttUrl.startsWith("tcps")) {
+            if (mqttUrl.startsWith("tcps") || mqttUrl.startsWith("wss")) {
                 builder = builder.sslWithDefaultConfig();
+            }
+            if (mqttUrl.startsWith("ws")) {
+                builder = builder.webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build());
             }
             client = builder.buildAsync();
             client.connect();
