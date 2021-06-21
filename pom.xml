@@ -24,7 +24,7 @@
         <commons-math.version>3.6.1</commons-math.version>
         <Configurable.version>0.30</Configurable.version>
         <dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
-        <FROST-Client.version>0.34</FROST-Client.version>
+        <FROST-Client.version>0.35</FROST-Client.version>
         <git-commit-id-plugin.version>4.0.5</git-commit-id-plugin.version>
         <hivemq-client.version>1.2.2</hivemq-client.version>
         <javax-activation.version>1.1.1</javax-activation.version>
