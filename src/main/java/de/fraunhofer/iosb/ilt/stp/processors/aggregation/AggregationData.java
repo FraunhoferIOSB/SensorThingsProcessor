@@ -18,6 +18,7 @@
 package de.fraunhofer.iosb.ilt.stp.processors.aggregation;
 
 import de.fraunhofer.iosb.ilt.sta.ServiceFailureException;
+import de.fraunhofer.iosb.ilt.sta.StatusCodeException;
 import de.fraunhofer.iosb.ilt.sta.model.Datastream;
 import de.fraunhofer.iosb.ilt.sta.model.MultiDatastream;
 import de.fraunhofer.iosb.ilt.sta.model.Thing;
@@ -111,6 +112,8 @@ public class AggregationData {
                 nr++;
                 setProgress(progressBase + nr * pPart);
             }
+        } catch (StatusCodeException exc) {
+            LOGGER.error("Service error loading Datastreams: {}, message:\n{}", exc.getStatusCode(), exc.getReturnedContent());
         } catch (ServiceFailureException exc) {
             LOGGER.error("Service error loading Datastreams: ", exc);
         }
@@ -159,6 +162,8 @@ public class AggregationData {
                 nr++;
                 setProgress(progressBase + nr * pPart);
             }
+        } catch (StatusCodeException exc) {
+            LOGGER.error("Service response: {}, message:\n{}", exc.getStatusCode(), exc.getReturnedContent());
         } catch (ServiceFailureException exc) {
             LOGGER.error("Service error: ", exc);
         }
@@ -217,8 +222,11 @@ public class AggregationData {
                 }
             }
             LOGGER.warn("No source found for {}.", target.baseName);
+        } catch (StatusCodeException exc) {
+            LOGGER.error("Failed to find source for {}.", target.baseName);
+            LOGGER.error("Service response: {}, message:\n{}", exc.getStatusCode(), exc.getReturnedContent());
         } catch (ServiceFailureException ex) {
-            LOGGER.error("Failed to find source for {}." + target.baseName);
+            LOGGER.error("Failed to find source for {}.", target.baseName);
             LOGGER.debug("Exception:", ex);
         }
     }
@@ -410,6 +418,8 @@ public class AggregationData {
                 copy.setMultiObservationDataTypes(null);
                 copy.setUnitOfMeasurements(null);
                 service.update(copy);
+            } catch (StatusCodeException exc) {
+                LOGGER.error("Failed to update reference: {}, message:\n{}", exc.getStatusCode(), exc.getReturnedContent());
             } catch (ServiceFailureException ex) {
                 LOGGER.error("Failed to update reference.", ex);
             }
