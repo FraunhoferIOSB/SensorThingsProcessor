@@ -38,7 +38,7 @@ public class GitVersionInfo {
     public static final TypeReference<Map<String, String>> TYPE_MAP_STRING_STRING = new TypeReference<Map<String, String>>() {
         // Empty on purpose.
     };
-    public static final String PACKAGE_NAME = "FROST-Server.Core";
+    public static final String PACKAGE_NAME = "FROST-Processor";
 
     private static final String PATH_GIT_COMMIT_ID_DESCRIBE = "git.commit.id.describe";
 
