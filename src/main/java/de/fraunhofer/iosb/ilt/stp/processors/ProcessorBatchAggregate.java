@@ -74,6 +74,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 import org.apache.commons.lang3.builder.CompareToBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,6 +91,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessorBatchAggregate.class);
     private static final int RECEIVE_QUEUE_CAPACITY = 100000;
+    private static final int QUEUE_SLEEP_MS = 1_000;
 
     private static class MessageContext {
 
@@ -213,6 +215,11 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             label = "Thread Count", description = "The number of simultanious calculations to run in parallel.", optional = true)
     @EditorInt.EdOptsInt(dflt = 2, min = 1, max = 99, step = 1)
     private int threads;
+
+    @ConfigurableField(editor = EditorInt.class,
+            label = "Max Queue Size", description = "The maximum number of queued calculations.", optional = true)
+    @EditorInt.EdOptsInt(dflt = 100000, min = 1, max = 99999999, step = 1)
+    private int maxQueueSize;
 
     @ConfigurableField(editor = EditorBoolean.class,
             label = "Cache", description = "Cache observations (only do this if there are no overlapping observations).", optional = true)
@@ -469,7 +476,18 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                     break;
                 }
             }
+            while (orderQueue.size() > maxQueueSize) {
+                sleepForQueue();
+            }
             createSubscriptions(entry);
+        }
+    }
+
+    private void sleepForQueue() {
+        try {
+            Thread.sleep(QUEUE_SLEEP_MS);
+        } catch (InterruptedException ex) {
+            // Rude wakeup.
         }
     }
 
