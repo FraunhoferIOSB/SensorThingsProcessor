@@ -18,6 +18,7 @@
 package de.fraunhofer.iosb.ilt.stp.sta;
 
 import com.google.gson.JsonElement;
+import com.hivemq.client.mqtt.MqttGlobalPublishFilter;
 import com.hivemq.client.mqtt.MqttWebSocketConfig;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
@@ -202,6 +203,10 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
                 builder = builder.webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build());
             }
             client = builder.buildAsync();
+            client.publishes(
+                    MqttGlobalPublishFilter.REMAINING,
+                    t -> LOGGER.debug("Message with no subscription for topic {}", t.getTopic())
+            );
         }
         if (!client.getState().isConnected()) {
             client.connect();
@@ -267,7 +272,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
     }
 
     public synchronized void unsubscribeAll() {
-        String[] topics = mqttSubscriptions.keySet().toArray(new String[0]);
+        String[] topics = mqttSubscriptions.keySet().toArray(String[]::new);
         for (String topic : topics) {
             removeSubscriptions(topic);
         }
