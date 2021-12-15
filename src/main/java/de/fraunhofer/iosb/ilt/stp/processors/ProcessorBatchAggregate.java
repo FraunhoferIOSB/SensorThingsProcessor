@@ -130,9 +130,9 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 calculateAggregate(combo, interval);
                 return;
             } catch (StatusCodeException ex) {
-                LOGGER.error("Failed to calculate order: {},{}", ex.getStatusCode(), ex.getReturnedContent());
+                LOGGER.error("Failed to calculate order (retry {}): {},{}", retries, ex.getStatusCode(), ex.getReturnedContent());
             } catch (ServiceFailureException | ProcessException ex) {
-                LOGGER.error("Failed to calculate order: {}", ex.getMessage());
+                LOGGER.error("Failed to calculate order (retry {}): {}", retries, ex.getMessage());
             }
             if (retries < 5) {
                 retries++;
