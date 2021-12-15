@@ -61,7 +61,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +136,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
     private int updated = 0;
     private String clientId;
     private Mqtt3AsyncClient client;
+    private ScheduledExecutorService maintenanceTimer;
 
     private final Map<String, List<Consumer<Mqtt3Publish>>> mqttSubscriptions = new HashMap<>();
 
@@ -165,10 +174,15 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
         return clientId;
     }
 
-    public synchronized Mqtt3AsyncClient getMqttClient() throws URISyntaxException {
+    private synchronized void connect() {
         if (client == null) {
             String myClientId = getClientId();
-            URI url = new URI(mqttUrl);
+            URI url;
+            try {
+                url = new URI(mqttUrl);
+            } catch (URISyntaxException ex) {
+                throw new IllegalStateException(ex);
+            }
             LOGGER.info("Connecting to {} using clientId {}.", mqttUrl, myClientId);
             Mqtt3ClientBuilder builder = Mqtt3Client.builder()
                     .identifier(myClientId)
@@ -179,6 +193,7 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
                     })
                     .addDisconnectedListener((context) -> {
                         LOGGER.info("connectionLost");
+                        connect();
                     });
             if (mqttUrl.startsWith("tcps") || mqttUrl.startsWith("wss")) {
                 builder = builder.sslWithDefaultConfig();
@@ -187,7 +202,20 @@ public class Service implements AnnotatedConfigurable<SensorThingsService, Objec
                 builder = builder.webSocketConfig(MqttWebSocketConfig.builder().serverPath(url.getPath()).build());
             }
             client = builder.buildAsync();
+        }
+        if (!client.getState().isConnected()) {
             client.connect();
+        }
+    }
+
+    public synchronized Mqtt3AsyncClient getMqttClient() throws URISyntaxException {
+
+        if (maintenanceTimer == null) {
+            maintenanceTimer = Executors.newSingleThreadScheduledExecutor();
+            maintenanceTimer.scheduleWithFixedDelay(() -> connect(), 1, 1, TimeUnit.MINUTES);
+        }
+        if (client == null) {
+            connect();
         }
         return client;
     }
