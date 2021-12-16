@@ -134,13 +134,14 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             } catch (ServiceFailureException | ProcessException ex) {
                 LOGGER.error("Failed to calculate order (retry {}): {}", retries, ex.getMessage());
             }
-            if (retries < 5) {
+            if (retries < maxRetries) {
                 retries++;
                 waiting.set(true);
                 offerOrder(this);
                 return;
             }
             LOGGER.error("Failed to calculate order after 5 tries: {} {}", combo, interval);
+            loggingStatus.setErrorCount(errorCount.incrementAndGet());
         }
 
         public Instant getTargetTime() {
@@ -220,6 +221,11 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
             label = "Max Queue Size", description = "The maximum number of queued calculations.", optional = true)
     @EditorInt.EdOptsInt(dflt = 100000, min = 1, max = 99999999, step = 1)
     private int maxQueueSize;
+
+    @ConfigurableField(editor = EditorInt.class,
+            label = "Max Retries", description = "The maximum number of retries on failed calculations.", optional = true)
+    @EditorInt.EdOptsInt(dflt = 10, min = 1, max = Integer.MIN_VALUE, step = 1)
+    private int maxRetries;
 
     @ConfigurableField(editor = EditorBoolean.class,
             label = "Cache", description = "Cache observations (only do this if there are no overlapping observations).", optional = true)
