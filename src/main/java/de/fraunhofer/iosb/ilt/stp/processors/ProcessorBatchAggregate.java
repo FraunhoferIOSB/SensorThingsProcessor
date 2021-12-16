@@ -224,7 +224,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
     @ConfigurableField(editor = EditorInt.class,
             label = "Max Retries", description = "The maximum number of retries on failed calculations.", optional = true)
-    @EditorInt.EdOptsInt(dflt = 10, min = 1, max = Integer.MIN_VALUE, step = 1)
+    @EditorInt.EdOptsInt(dflt = 10, min = 1, max = Integer.MAX_VALUE, step = 1)
     private int maxRetries;
 
     @ConfigurableField(editor = EditorBoolean.class,
