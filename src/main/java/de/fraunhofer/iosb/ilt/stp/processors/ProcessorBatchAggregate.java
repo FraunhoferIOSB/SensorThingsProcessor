@@ -130,9 +130,9 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 calculateAggregate(combo, interval);
                 return;
             } catch (StatusCodeException ex) {
-                LOGGER.error("Failed to calculate order (retry {}): {},{}", retries, ex.getStatusCode(), ex.getReturnedContent());
+                LOGGER.error("Failed to calculate order (retry {}) {}: {},{}", retries, combo, ex.getStatusCode(), ex.getReturnedContent());
             } catch (ServiceFailureException | ProcessException ex) {
-                LOGGER.error("Failed to calculate order (retry {}): {}", retries, ex.getMessage());
+                LOGGER.error("Failed to calculate order (retry {}) {}: {}", retries, combo, ex.getMessage());
             }
             if (retries < maxRetries) {
                 retries++;
@@ -140,7 +140,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
                 offerOrder(this);
                 return;
             }
-            LOGGER.error("Failed to calculate order after 5 tries: {} {}", combo, interval);
+            LOGGER.error("Failed to calculate order after {} tries: {} {}", retries, combo, interval);
             loggingStatus.setErrorCount(errorCount.incrementAndGet());
         }
 
