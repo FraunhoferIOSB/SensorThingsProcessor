@@ -231,6 +231,12 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
     @EditorBoolean.EdOptsBool(dflt = false)
     private boolean cacheObs;
 
+    @ConfigurableField(editor = EditorLong.class,
+            label = "Logging Interval", description = "The number of milliseconds between status logs.",
+            optional = true)
+    @EditorLong.EdOptsLong(dflt = 10000, min = 100, max = 999999)
+    private long loggingInterval;
+
     private final Map<Id, WeakReference<Observation>> obsCache = new HashMap<>();
 
     private boolean noAct = false;
@@ -268,6 +274,7 @@ public class ProcessorBatchAggregate extends AbstractConfigurable<Void, Void> im
 
         aggregationData = new AggregationData(stsSource, fixRefs);
         aggregationData.setZoneId(zoneId);
+        periodLogger.setLogIntervalMs(loggingInterval);
     }
 
     @Override
