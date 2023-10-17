@@ -1,4 +1,4 @@
-FROM openjdk:11
+FROM openjdk:17
 
 # Copy to images tomcat path
 ARG JAR_FILE
