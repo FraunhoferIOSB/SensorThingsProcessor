@@ -6,6 +6,7 @@ RUN mvn -B package
 
 FROM openjdk:17
 ARG JAR_FILE
+WORKDIR /usr/local/FROST
 COPY --from=build /usr/local/FROST/target/${JAR_FILE} /usr/local/FROST/${JAR_FILE}}
 RUN ls -la
 CMD ["java", "-jar", "FROST-Processor.jar"]
