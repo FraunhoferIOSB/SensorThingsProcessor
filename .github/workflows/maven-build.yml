@@ -37,6 +37,7 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         GITHUB_USERNAME: ${{ secrets.TOKEN_USERNAME }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        IMAGE_NAME: ${{ vars.IMAGE_NAME }}
       run: |
         mvn -B dockerfile:build
         mvn -B dockerfile:tag@tag-version
