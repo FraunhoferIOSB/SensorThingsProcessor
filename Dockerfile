@@ -1,4 +1,4 @@
-FROM openjdk:17
+FROM --platform=linux/amd64 openjdk:17
 
 # Copy to images tomcat path
 ARG JAR_FILE
