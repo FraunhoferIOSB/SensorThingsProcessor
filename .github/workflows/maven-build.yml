@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -31,16 +32,21 @@ jobs:
     - name: Build with Maven
       run: mvn -B package
 
-    - name: Build & Push Docker
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        GITHUB_USERNAME: ${{ secrets.TOKEN_USERNAME }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        IMAGE_NAME: ${{ vars.IMAGE_NAME }}
-      run: |
-        mvn -B dockerfile:build
-        mvn -B dockerfile:tag@tag-version
-        mvn -B dockerfile:push@push-latest -Ddockerfile.useMavenSettingsForAuth=true --settings maven-ci-settings.xml
-        mvn -B dockerfile:push@push-version -Ddockerfile.useMavenSettingsForAuth=true --settings maven-ci-settings.xml
-
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.TOKEN_USERNAME }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{vars.IMAGE_NAME}}:latest, ${{vars.IMAGE_NAME}}:${{ github.sha }}
