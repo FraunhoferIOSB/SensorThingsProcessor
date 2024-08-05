@@ -48,6 +48,6 @@ jobs:
         context: ${{ github.workspace }}
         platforms: linux/arm64,linux/amd64
         build-args: |
-          JAR_FILE="FROST-Processor.jar"
+          JAR_FILE=FROST-Processor.jar
         push: true
         tags: ${{vars.IMAGE_NAME}}:latest, ${{vars.IMAGE_NAME}}:${{ github.sha }}
