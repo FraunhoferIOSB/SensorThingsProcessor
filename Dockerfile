@@ -10,6 +10,6 @@ RUN ls -la target
 FROM openjdk:17
 ARG JAR_FILE
 WORKDIR /usr/local/FROST
-COPY --from=build /usr/local/FROST/target/${JAR_FILE} /usr/local/FROST/${JAR_FILE}
+COPY --from=build /usr/local/FROST/target/SensorThingsProcessor-0.11-SNAPSHOT-jar-with-dependencies.jar /usr/local/FROST/FROST-Processor.jar
 RUN ls -la
 CMD ["java", "-jar", "FROST-Processor.jar"]
