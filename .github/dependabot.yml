@@ -4,17 +4,20 @@ updates:
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "org.openjfx:*"
+        versions: ["[24,)"]
 
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     groups:
       dependencies:
         patterns:
