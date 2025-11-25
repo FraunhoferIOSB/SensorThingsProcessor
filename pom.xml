@@ -26,7 +26,7 @@
 
         <!-- Dependency versions -->
         <commons-io.version>2.15.1</commons-io.version>
-        <commons-lang.version>3.14.0</commons-lang.version>
+        <commons-lang.version>3.18.0</commons-lang.version>
         <commons-math.version>3.6.1</commons-math.version>
         <Configurable.version>0.34</Configurable.version>
         <FROST-Client.version>0.44</FROST-Client.version>
